@@ -3,7 +3,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   LayoutDashboard, PenLine, FileText, MessageSquare, Activity,
   CheckSquare, FolderKanban, Rocket, Bot, BarChart3, BookOpen, Settings,
-  Inbox, Users
+  Inbox, Users, BellRing
 } from 'lucide-react';
 
 import { NavigationTab, UserRole } from '@/shared/types';
@@ -34,6 +34,7 @@ import { isDesktop } from '@/shared/desktop';
  */
 
 export type SectionId =
+  | 'attention'
   | 'build'
   | 'portal'
   | 'my_work'
@@ -64,6 +65,7 @@ export interface NavSection {
  * assigned work, automation, resources, and communication.
  */
 export const NAV_SECTIONS: NavSection[] = [
+  { id: 'attention', label: 'Needs your attention' },
   { id: 'build', label: 'Build' },
   { id: 'portal', label: 'Portal', labels: { pm: 'Overview', admin: 'Overview' } },
   { id: 'my_work', label: 'My Work' },
@@ -85,10 +87,10 @@ export const NAV_SECTIONS: NavSection[] = [
 
 const ROLE_SECTION_ORDER: Record<UserRole, SectionId[]> = {
   client: ['portal', 'requests', 'communication', 'documents', 'settings'],
-  dev: ['build', 'my_work', 'automation', 'resources', 'communication', 'insights', 'settings'],
+  dev: ['attention', 'build', 'my_work', 'automation', 'resources', 'communication', 'insights', 'settings'],
   // The PM sees the people and projects first, with incoming inquiries and project requests grouped separately.
-  pm: ['build', 'portal', 'clients', 'projects', 'requests', 'delivery', 'collaboration', 'automation', 'resources', 'operations', 'insights', 'workspace'],
-  admin: ['build', 'portal', 'projects', 'delivery', 'collaboration', 'automation', 'resources', 'operations', 'insights', 'administration']
+  pm: ['attention', 'build', 'portal', 'clients', 'projects', 'requests', 'delivery', 'collaboration', 'automation', 'resources', 'operations', 'insights', 'workspace'],
+  admin: ['attention', 'build', 'portal', 'projects', 'delivery', 'collaboration', 'automation', 'resources', 'operations', 'insights', 'administration']
 };
 
 export interface NavItem {
@@ -131,6 +133,8 @@ export interface NavItem {
 }
 
 export const NAV_ITEMS: NavItem[] = [
+  // Everything waiting on this person across projects: plans to approve, stopped builds, work to review, clients waiting.
+  { id: 'attention', label: 'Needs your attention', title: 'Needs your attention', subtitle: 'Everything waiting on you, across projects', group: 'primary', section: 'attention', icon: BellRing },
   { id: 'portal', label: 'Overview', labels: { client: 'My Projects' }, title: 'Overview', subtitle: 'Your requests, progress, and project status', group: 'primary', section: 'portal', icon: LayoutDashboard },
   // Chat is where developers, project managers and admins build with Alpha and the
   // agents, in the desktop app only (AI_NAV_TABS). Clients talk to the team in the portal.
@@ -202,14 +206,14 @@ export function navIcon(id: NavigationTab, className = 'w-4 h-4'): React.ReactNo
  */
 const ROLE_NAV_ALL: Record<UserRole, NavigationTab[]> = {
   client: ['portal', 'intake', 'settings'],
-  dev: ['issues', 'projects', 'agents', 'skills', 'chat', 'settings'],
+  dev: ['issues', 'attention', 'projects', 'agents', 'skills', 'chat', 'settings'],
   // Client work starts with the client and project conversation; inquiries remain separate pre-project intake.
   pm: [
-    'clients', 'inquiries', 'projects', 'issues',
+    'clients', 'attention', 'inquiries', 'projects', 'issues',
     'chat', 'agents', 'skills', 'analytics', 'settings'
   ],
   admin: [
-    'issues', 'projects',
+    'issues', 'attention', 'projects',
     'chat', 'agents', 'skills', 'analytics', 'operations', 'settings'
   ]
 };
