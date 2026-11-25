@@ -30,6 +30,13 @@ export interface PmNextStepFlags {
   canResume: boolean;
 }
 
+/** Project requests without an existing scope use the conversation and board checklist. */
+export function pmProjectUsesChecklist(ticket: PmTicketDetail): boolean {
+  return Boolean(ticket.internal.projectId && !ticket.scope && !ticket.internal.scopeVersion
+    && !ticket.internal.authorizedScopeVersionId && !ticket.internal.requiredIssueIds.length
+    && !ticket.delivery && !ticket.internal.deliveryAssessment);
+}
+
 type Step = PmNextStep['primary'];
 const TERMINAL = new Set(['closed', 'declined', 'cancelled']);
 const when = (allowed: boolean, action: PmStepAction, label: string): Step => allowed ? { action, label } : null;
@@ -83,11 +90,17 @@ export function pmNextStep(ticket: PmTicketDetail, flags: PmNextStepFlags): PmNe
   if (TERMINAL.has(ticket.status)) return finishedStep(ticket);
   if (ticket.status === 'on_hold') return STEPS.resolve_hold(ticket, flags);
   if (ticket.internal.withdrawalRequested) return WITHDRAWAL;
+  const checklist = pmProjectUsesChecklist(ticket);
   if (!flags.clientAccessActive) {
-    return flags.canInvite
-      ? step('You', 'Invite the client', 'They need a portal account before you can message them or send a plan.', { action: 'invite', label: 'Invite client' })
-      : step('Client', 'Waiting for the client to activate their account', 'You can keep private notes until they join.');
+    if (!flags.canInvite) return step('Client', 'Waiting for the client to activate their account', 'You can keep private notes until they join.');
+    const detail = checklist ? 'They need a portal account before you can message them.'
+      : 'They need a portal account before you can message them or send a plan.';
+    return step('You', 'Invite the client', detail, { action: 'invite', label: 'Invite client' });
   }
   const next = ticket.internal.nextAction;
+  if (checklist && next === 'review_ticket') return step(null, 'Manage request', 'Track the work on the project board.');
+  if (checklist && next === 'reply' && ticket.internal.actionOwner !== 'client') {
+    return step('You', 'The client replied', 'Continue in the conversation.', { action: 'reply', label: 'Reply' });
+  }
   return next ? STEPS[next](ticket, flags) : step(null, 'Nothing to do right now', '');
 }

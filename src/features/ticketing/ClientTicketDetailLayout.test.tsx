@@ -1,8 +1,25 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { ClientTicketDetail } from './ClientTicketDetail';
+import { ClientRequestRail, ClientTicketDetail } from './ClientTicketDetail';
 
 describe('client ticket detail layout', () => {
+  it('shows task-based status in a project request without a plan', () => {
+    const html = renderToStaticMarkup(<ClientRequestRail
+      workspaceId="workspace-a" projectPanel checklist="ready_to_check"
+      ticket={{ id: 'ticket-a', reference: 'TKT-1', title: 'Example request', status: 'under_review',
+        createdAt: '2026-10-17T00:00:00Z', updatedAt: '2026-10-17T00:00:00Z', closedAt: null,
+        readOnly: false, writesAvailable: true, requestedAction: null, description: 'Request details',
+        companyLabel: 'Calc Co.', version: 2, sharedProjectName: 'Website', relatedTicket: null,
+        scope: null, delivery: null, request: null }}
+      busy={false} onReply={async () => undefined} onDecision={() => undefined}
+      onAdditionalWork={() => undefined} onCorrection={async () => undefined}
+    />);
+    expect(html).toContain('Ready to check');
+    expect(html).not.toContain('Planning');
+    expect(html).not.toContain('Approve plan');
+    expect(html).not.toContain('What happens next');
+  });
+
   it('fills the left side with the conversation and keeps the request details in the panel on the right', () => {
     const html = renderToStaticMarkup(<ClientTicketDetail
       workspaceId="workspace-a"

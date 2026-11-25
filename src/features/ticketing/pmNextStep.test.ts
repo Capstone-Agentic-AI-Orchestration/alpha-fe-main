@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PmTicketDetail } from './pmApi';
-import { pmNextStep, type PmNextStepFlags } from './pmNextStep';
+import { pmNextStep, pmProjectUsesChecklist, type PmNextStepFlags } from './pmNextStep';
 
 const flags = (overrides: Partial<PmNextStepFlags> = {}): PmNextStepFlags => ({
   clientAccessActive: true, canInvite: false, canPlan: true, canStartWork: true, canCheckAndShare: true,
@@ -26,8 +26,21 @@ describe('the PM next step', () => {
     expect(pmNextStep(ticket('under_review', 'review_ticket'), flags({ clientAccessActive: false })).primary).toBeNull();
   });
 
-  it('starts a new request with sending a plan, with no separate review step', () => {
+  it('starts a standalone request with sending a plan', () => {
     expect(pmNextStep(ticket('received', 'review_ticket'), flags())).toMatchObject({ title: 'Send the client a plan', primary: { action: 'plan' } });
+  });
+
+  it('uses the checklist for new project requests while preserving actions for existing scopes', () => {
+    const request = ticket('received', 'review_ticket');
+    const projectRequest = { ...request, internal: { ...request.internal, projectId: 'project-1' } };
+    expect(pmProjectUsesChecklist(projectRequest)).toBe(true);
+    expect(pmNextStep(projectRequest, flags())).toMatchObject({ title: 'Manage request', primary: null, alternative: null });
+    expect(pmProjectUsesChecklist(request)).toBe(false);
+
+    const existing = { ...projectRequest, status: 'under_review' as const, scope: scope('client'),
+      internal: { ...projectRequest.internal, nextAction: 'authorize_work' as const } };
+    expect(pmProjectUsesChecklist(existing)).toBe(false);
+    expect(pmNextStep(existing, flags()).primary).toMatchObject({ action: 'start_work' });
   });
 
   it('offers to start without approval while waiting on the client', () => {

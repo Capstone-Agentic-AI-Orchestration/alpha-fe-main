@@ -1,4 +1,5 @@
 import type { ClientTicketStatus } from './clientApi';
+import { CHECKLIST_LABEL, type RequestChecklistStatus } from './projectConversation';
 
 export type ClientTicketRequestedAction = 'reply' | 'agree_scope' | 'review_result' | null;
 
@@ -9,10 +10,20 @@ export interface ClientTicketProgress {
   needsClientAction: boolean;
 }
 
+const CHECKLIST_DESCRIPTION: Record<RequestChecklistStatus, string> = {
+  open: 'The project manager can follow up here if they need more details.',
+  in_progress: 'The team is working on your request.',
+  ready_to_check: 'The linked work is complete. Review it and reply here if anything needs changing.',
+  done: 'This request was marked done. Its conversation stays available.',
+  declined: 'The project manager declined this request. Its conversation stays available.',
+  cancelled: 'This request was cancelled. Its conversation stays available.',
+};
+
 /** Client-safe explanation of the current request state; never infers project completion. */
 export function clientTicketProgress(
   status: ClientTicketStatus,
   requestedAction: ClientTicketRequestedAction,
+  checklist?: RequestChecklistStatus,
 ): ClientTicketProgress {
   if (status === 'closed') return {
     statusLabel: 'Done',
@@ -49,6 +60,12 @@ export function clientTicketProgress(
     label: 'Your result is ready to check',
     description: 'Look over the result. Accept it to finish the request, or tell the project manager what needs fixing.',
     needsClientAction: true,
+  };
+  if (checklist && status !== 'on_hold') return {
+    statusLabel: CHECKLIST_LABEL[checklist],
+    label: CHECKLIST_LABEL[checklist],
+    description: CHECKLIST_DESCRIPTION[checklist],
+    needsClientAction: false,
   };
 
   switch (status) {

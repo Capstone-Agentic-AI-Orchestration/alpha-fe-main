@@ -154,8 +154,7 @@ export function PmClientsWorkspace({ api = pmTicketApi, documentsApi = pmTicketD
   const [projectDetails, setProjectDetails] = useState<ClientProjectDetail[] | null>(null);
   const [proposals, setProposals] = useState<PmCentralIntakeItem[] | null>(null);
   const [proposalsError, setProposalsError] = useState('');
-  // A request picked on Overview, Conversations or Documents, opened in the Tickets tab.
-  const [openRequestId, setOpenRequestId] = useState<string | null>(null);
+  const [openTicket, setOpenTicket] = useState<{ id: string; reference?: string } | null>(null);
   // The project and request the Conversation tab opens on, when picked elsewhere.
   const [conversationFocus, setConversationFocus] = useState<PmConversationFocus | null>(null);
 
@@ -192,10 +191,14 @@ export function PmClientsWorkspace({ api = pmTicketApi, documentsApi = pmTicketD
     if (clients && selectedKey && !selected) onSelectKey(null);
   }, [clients, selectedKey, selected, onSelectKey]);
 
+  useEffect(() => {
+    setOpenTicket(null);
+    setConversationFocus(null);
+  }, [selectedKey, workspaceKey]);
+
   // The open client's requests and latest messages, for Overview, Conversations and Documents.
   useEffect(() => {
-    setRequests(null); setConversations(null); setConversationsError(''); setProposals(null); setProposalsError(''); setOpenRequestId(null);
-    setConversationFocus(null);
+    setRequests(null); setConversations(null); setConversationsError(''); setProposals(null); setProposalsError('');
     if (!selectedKey || !intakeEnabled) return;
     let current = true;
     void loadClientRequests(options => api.list(options), selectedKey).then(result => { if (current) setRequests(result.items); })
@@ -228,19 +231,19 @@ export function PmClientsWorkspace({ api = pmTicketApi, documentsApi = pmTicketD
     const request = requests?.find(item => item.id === requestId);
     const projectId = request?.internal.projectId ?? null;
     if (projectId) { setConversationFocus({ projectId, ticketId: requestId }); onSection('conversation'); return; }
-    setOpenRequestId(requestId); onSection('tickets');
+    setOpenTicket({ id: requestId, reference: request?.reference }); onSection('tickets');
   };
 
   return <PmClientsView clients={clients} error={error} loading={loading} search={search} onSearch={setSearch}
     needsYouOnly={needsYouOnly} onNeedsYouOnly={setNeedsYouOnly}
-    selectedKey={selectedKey} onSelect={key => { onSelectKey(key); if (key) { setOpenRequestId(null); onSection('overview'); } }}
+    selectedKey={selectedKey} onSelect={key => { onSelectKey(key); if (key) { setOpenTicket(null); onSection('overview'); } }}
     section={section} onSection={onSection}
     knownProjectIds={knownProjectIds} onOpenProject={onOpenProject} onOpenInquiries={onOpenInquiries}
-    renderTickets={key => openRequestId ? <div className="pm-ticket-page pm-ticket-page--nested">
+    renderTickets={key => openTicket ? <div className="pm-ticket-page pm-ticket-page--nested">
       <div className="pm-ticket-page__content">
-        <PmTicketsView key={`${workspaceKey}:${key}:${openRequestId}`} api={api} documentsApi={documentsApi}
-          fixedClientGroupKey={key} initialSelectedId={openRequestId} ticketReference={requests?.find(item => item.id === openRequestId)?.reference}
-          intakeEnabled={intakeEnabled} workflowActions={workflowActions} communicationEnabled
+        <PmTicketsView key={`${workspaceKey}:${key}:${openTicket.id}`} api={api} documentsApi={documentsApi}
+          fixedClientGroupKey={key} initialSelectedId={openTicket.id} ticketReference={openTicket.reference}
+          intakeEnabled={intakeEnabled} workflowActions={workflowActions} communicationEnabled refreshToken={`${refreshToken ?? 0}:${refreshVersion}`}
           renderRequestConversation={({ detail, replyKind, onReplyKindChange, onWritten }) => {
             // A request the client sees on a project lives in that project's one conversation.
             const clientId = clientIdFromKey(key);
@@ -253,7 +256,13 @@ export function PmClientsWorkspace({ api = pmTicketApi, documentsApi = pmTicketD
       </div>
     </div> : <p className="p-6 text-xs text-content-muted">Choose a request from the client overview.</p>}
     renderConversation={client => <PmClientConversationTab api={api} documentsApi={documentsApi} client={client} focus={conversationFocus}
-      onBackToProjects={() => onSection('projects')} workflowActions={workflowActions} onCreateTask={onCreateTask} refreshToken={refreshToken} />}
+      onBackToProjects={() => onSection('projects')} onCreateTask={onCreateTask} refreshToken={refreshToken}
+      onOpenWorkflow={workflowActions !== 'none' ? (focus, reference) => {
+        if (!focus.ticketId) return;
+        setConversationFocus(focus);
+        setOpenTicket({ id: focus.ticketId, reference });
+        onSection('tickets');
+      } : undefined} />}
     renderOverview={client => <ClientOverview client={client} requests={requests} conversations={conversations} onOpenRequest={openRequest} />}
     renderConversations={client => <ClientConversations client={client} requests={requests} conversations={conversations}
       error={conversationsError} onOpenRequest={openRequest} />}

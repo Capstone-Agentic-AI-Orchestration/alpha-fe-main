@@ -3,10 +3,9 @@ import { ChevronRight, FolderKanban, Plus } from 'lucide-react';
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
 import { ApiRequestError } from '@/shared/services/apiService';
-import { pmTicketApi, pmTicketDocumentsApi, type PmClientProjectConversation, type PmClientSummary } from './pmApi';
+import { pmTicketApi, pmTicketDocumentsApi, type PmClientProjectConversation, type PmClientSummary, type PmTicketDetail } from './pmApi';
 import { ProjectConversationChat, ProjectConversationView, useConversationJump, type ConversationAbout } from './ProjectConversationView';
-import { PmTicketsView, type WorkflowActions } from './PmTicketsView';
-import { PmSelectedTicket, PmTicketProgress, usePmRequestDetail } from './PmRequestContext';
+import { PmSelectedTicket, usePmRequestDetail } from './PmRequestContext';
 import { PmConversationRail } from './PmConversationRail';
 import type { TicketDocumentsReadApi } from './ticketDocuments';
 import { canToggleRequest, withUpdatedRequest, type ConversationItem, type ConversationRequest } from './projectConversation';
@@ -34,6 +33,22 @@ export interface ConversationTaskDraft {
 
 /** How a PM reply about a request is sent: an ordinary reply, or a question the client must answer. */
 export type PmReplyKind = 'reply' | 'request_details';
+
+function RequestQuestionButton({ detail, replyKind, onChange, inputId }: Readonly<{
+  detail: PmTicketDetail | null;
+  replyKind: PmReplyKind;
+  onChange: (kind: PmReplyKind) => void;
+  inputId: string;
+}>) {
+  if (replyKind === 'request_details') {
+    return <Button type="button" variant="ghost" size="sm" onClick={() => onChange('reply')}>Ask &amp; wait for reply · Cancel</Button>;
+  }
+  if (!detail?.writesAvailable || !['received', 'under_review', 'awaiting_client', 'in_progress', 'ready_for_review'].includes(detail.status)) return null;
+  return <Button type="button" variant="ghost" size="sm" onClick={() => {
+    onChange('request_details');
+    document.getElementById(inputId)?.focus();
+  }}>Ask &amp; wait for reply</Button>;
+}
 
 /**
  * Loads one client's conversation about one project, refreshes it every 30
@@ -131,17 +146,16 @@ function useAboutTarget(selected: ConversationAbout | null) {
 
 /**
  * A client's Conversation tab: one conversation per project the client can see.
- * The side panel expands the selected ticket beside the same project conversation,
- * with its next step and that step's buttons, request details, private notes and documents. Tasks are
+ * The side panel shows the selected ticket's checklist actions, details, notes and documents. Tasks are
  * attached to a request by creating them from it (Create task).
  */
-export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTicketDocumentsApi, client, focus = null, workflowActions,
-  onBackToProjects, onCreateTask, refreshToken }: Readonly<{
+export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTicketDocumentsApi, client, focus = null,
+  onBackToProjects, onOpenWorkflow, onCreateTask, refreshToken }: Readonly<{
   api?: typeof pmTicketApi;
   documentsApi?: TicketDocumentsReadApi;
   client: PmClientSummary;
   focus?: PmConversationFocus | null;
-  workflowActions: WorkflowActions;
+  onOpenWorkflow?: (focus: PmConversationFocus, reference: string) => void;
   onBackToProjects?: () => void;
   /** Opens the New task dialog; absent where tasks cannot be made, as in the UI preview. */
   onCreateTask?: (draft: ConversationTaskDraft) => void;
@@ -288,30 +302,21 @@ export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTi
       renderRail={({ requestList, requestsTitle }) => <PmConversationRail
         projectName={project?.projectName ?? 'Project'} stage={stageCard} previewShared={previewShared}
         ticketsTitle={requestsTitle}
-        progress={contextRequest ? <PmTicketProgress detail={contextTicketDetail}
-          loading={!contextTicketDetail && !contextTicketError} /> : null}
         tickets={requestList}
         selected={contextRequest && <PmSelectedTicket key={contextRequest.ticketId} api={api} documentsApi={documentsApi}
           request={contextRequest} clientName={client.displayName} detail={contextTicketDetail} error={contextTicketError}
           refreshToken={`${refreshToken ?? 0}:${contextVersion}`}
           onChanged={refreshTicket}
+          onOpenWorkflow={onOpenWorkflow && projectId ? () => onOpenWorkflow({ projectId, ticketId: contextRequest.ticketId }, contextRequest.reference) : undefined}
           actions={<>
             {canToggleRequest(contextRequest) && <Button type="button" variant="outline" size="sm" disabled={busy}
               onClick={() => toggle(contextRequest, contextRequest.checklist !== 'done')}>
               {contextRequest.checklist === 'done' ? 'Reopen ticket' : 'Mark done'}
             </Button>}
             {renderRequestActions(contextRequest)}
-          </>}
-          workflow={workflowActions !== 'none' ? <PmTicketsView api={api} documentsApi={documentsApi}
-            fixedClientGroupKey={client.key} initialSelectedId={contextRequest.ticketId} workflowReference={contextRequest.reference} workflowActions={workflowActions}
-            communicationEnabled refreshToken={`${refreshToken ?? 0}:${contextVersion}`} onWorkflowChanged={refreshTicket}
-            onWorkflowReply={kind => {
-              target.restore();
-              setReplyKind(kind);
-              document.getElementById(inputId)?.focus();
-            }} /> : undefined} />} />}
-      composerExtra={target.about && replyKind === 'request_details' ? <Button type="button" variant="ghost" size="sm"
-        onClick={() => setReplyKind('reply')}>Ask & wait for reply · Cancel</Button> : undefined}
+          </>} />} />}
+      composerExtra={target.about && <RequestQuestionButton detail={contextTicketDetail} replyKind={replyKind}
+        onChange={setReplyKind} inputId={inputId} />}
       focusTicketId={focus?.ticketId ?? null}
       selectedTicketId={selectedTicketId}
       onSelectRequest={request => setContextTicketId(request.ticketId)}

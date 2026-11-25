@@ -17,6 +17,7 @@ import {
 import { clientTicketProgress } from './clientTicketProgress';
 import { clientWhatNext } from './clientFriendly';
 import { clientProgressSteps } from './clientProgressSteps';
+import type { RequestChecklistStatus } from './projectConversation';
 import { ClientProgressStrip } from './ClientProgressStrip';
 import { TicketChat, type TicketChatMessage, type TicketChatProps } from './TicketChat';
 import { CxBadge, requestTone, type CxTone } from './clientKit';
@@ -49,6 +50,7 @@ export interface ClientRequestRailProps {
   revealFiles?: number;
   /** Use the flatter single-panel hierarchy shown beside a project conversation. */
   projectPanel?: boolean;
+  checklist?: RequestChecklistStatus;
 }
 
 /** Whether the client can write about this request right now. */
@@ -62,24 +64,28 @@ export function clientCanReply(ticket: ClientTicketRecord, options: { readOnlyPr
  * then the plan or result, what was asked, files and details. Files and details fold away.
  */
 export function ClientRequestRail(props: Readonly<ClientRequestRailProps>) {
-  const { ticket, workflowActionsDisabled = false, busy, lead } = props;
+  const { ticket, workflowActionsDisabled = false, busy, lead, checklist } = props;
   const projectPanel = props.projectPanel ?? false;
   const decisions = useRequestDecisions(ticket, workflowActionsDisabled, props.onDecision);
   const canReply = clientCanReply(ticket, props);
   const requestedAction = workflowActionsDisabled ? null : ticket.requestedAction;
-  const progress = clientTicketProgress(ticket.status, requestedAction);
+  const progress = clientTicketProgress(ticket.status, requestedAction, checklist);
+  const checklistActive = checklist === 'in_progress' || checklist === 'ready_to_check';
+  let statusTone = requestTone(ticket.status, requestedAction);
+  if (!requestedAction && checklistActive) statusTone = 'active';
+  if (!requestedAction && checklist === 'done') statusTone = 'done';
   const content = <>
     <div className="cx-reqrail-top">
       {lead}
       <RequestHead ticket={ticket} statusLabel={progress.statusLabel} description={progress.description}
-        tone={requestTone(ticket.status, requestedAction)} extraAction={<AdditionalWork {...props} />} compact={projectPanel} />
+        tone={statusTone} extraAction={<AdditionalWork {...props} />} compact={projectPanel} />
       {decisions.owed && <section className="client-decision-slot cx-panel is-attention cx-decision" aria-labelledby="client-decision-title">
         <h2 id="client-decision-title">{'Action needed: ' + progress.label}</h2>
         {decisions.owed === 'plan'
           ? <PlanBody ticket={ticket} scopeDecision={decisions.scopeDecision} canReply={canReply} busy={busy} onAsk={decisions.setConfirming} onReply={props.onReply} />
           : <ResultBody {...props} decisions={decisions} />}
       </section>}
-      <RequestStanding ticket={ticket} requestedAction={requestedAction} compact={projectPanel} />
+      {!checklist && <RequestStanding ticket={ticket} requestedAction={requestedAction} compact={projectPanel} />}
     </div>
     <RailMore {...props} decisions={decisions} canReply={canReply} compact={projectPanel} />
     {decisions.confirming && <ConfirmDecision confirming={decisions.confirming} busy={busy} canAccept={decisions.canReview && decisions.reviewAcknowledged}
