@@ -434,9 +434,6 @@ export const clientTicketApi = {
       () => clientTicketApi.getStageOperation(workspaceId, projectId, body.operationId),
     );
   },
-  signContract(workspaceId: string, projectId: string, contractId: string, input: { operationId: string; contentHash: string; fullName: string }) {
-    return clientTicketApi.stageCommand(workspaceId, projectId, `contract/${pathId(contractId)}/sign`, { ...input, consent: true });
-  },
   /** Replaces the open feedback round's notes; nothing reaches the PM until the round is sent. */
   async saveRoundItems(workspaceId: string, projectId: string, roundId: string, items: string[]): Promise<StageSummary> {
     return parseStageSummary(await requestJson<unknown>(

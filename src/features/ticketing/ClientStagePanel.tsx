@@ -1,14 +1,11 @@
 import { useState } from 'react';
 import type { clientTicketApi, ClientProject } from './clientApi';
 import { stageDay } from './stageDates';
-import { SignOffDialog } from './SignOffDialog';
 import { ContractView } from './ContractView';
 import { ClientDevelopmentStage, RoundHistory } from './ClientDevelopmentStage';
 import { ClientRequests } from './StageRequests';
 import type { StageResult, StageSummary } from './projectStages';
 import './projectStages.css';
-
-const newOperationId = () => crypto.randomUUID();
 
 export interface ClientStagePanelProps {
   api: typeof clientTicketApi;
@@ -25,45 +22,15 @@ export function ClientStagePanel(props: Readonly<ClientStagePanelProps>) {
   const { summary } = props;
   return <div className="ps-panel">
     {summary.stage === 'unset' && <p className="ps-note">The project manager will set this project’s stage. Until then, keep using the conversation as usual.</p>}
-    {summary.stage === 'poc' && <p className="ps-lead">Your project is in the proof-of-concept stage. Talk the idea through with your project
-      manager here; the contract comes next.</p>}
-    {summary.stage === 'contract' && <ClientContractStage {...props} />}
+    {/* 'contract' is the old in-app contract stage; the contract is now signed in person, so it reads as the end of the POC. */}
+    {(summary.stage === 'poc' || summary.stage === 'contract') && <p className="ps-lead">Your project is in the proof-of-concept stage.
+      Talk the idea through with your project manager here. You sign the development contract with them in person, then development starts.</p>}
     {summary.stage === 'development' && <ClientDevelopmentStage {...props} />}
     {summary.stage === 'completed' && <ClientCompletedStage summary={summary} />}
     {(summary.stage === 'development' || summary.stage === 'completed') && <ClientRequests {...props} />}
     {(summary.stage === 'development' || summary.stage === 'completed') && <SignedContract summary={summary} />}
     {props.actionError && <p role="alert" className="ps-error">{props.actionError}</p>}
   </div>;
-}
-
-function ClientContractStage({ api, project, summary, busy, readOnly = false, run }: Readonly<ClientStagePanelProps>) {
-  const [signing, setSigning] = useState(false);
-  const contract = summary.contract;
-  if (!contract) return <p className="ps-note">The project manager is preparing the development contract.
-    You’ll be asked to sign it here.</p>;
-  const sign = async (fullName: string) => {
-    if (!contract.contentHash) return;
-    const done = await run(() => api.signContract(project.workspaceId, project.projectId, contract.id,
-      { operationId: newOperationId(), contentHash: contract.contentHash!, fullName }), 'Your signature was not saved. Try again.');
-    if (done) setSigning(false);
-  };
-  const waiting = contract.status === 'issued';
-  return <>
-    <p className="ps-lead">{waiting
-      ? <>Read the development contract, then sign it. It includes <strong>{contract.terms.revisionLimit} revision round{contract.terms.revisionLimit === 1 ? '' : 's'}</strong> during development.</>
-      : <>You signed the contract on {stageDay(contract.clientSignedAt)}. Development starts when the project manager countersigns.</>}</p>
-    <ContractView contract={contract} />
-    {waiting && !readOnly && <div className="ps-actions">
-      <button type="button" className="ps-button is-primary" onClick={() => setSigning(true)} disabled={busy}>Sign the contract</button>
-    </div>}
-    {signing && <SignOffDialog title="Sign the development contract" busy={busy} confirmLabel="Sign contract"
-      consent="I have read and agree to this development contract."
-      onCancel={() => setSigning(false)} onConfirm={fullName => void sign(fullName)}>
-      <p className="ps-copy"><strong>{contract.terms.projectName}</strong> · {contract.terms.scope.title} ·
-        {' '}{contract.terms.revisionLimit} revision round{contract.terms.revisionLimit === 1 ? '' : 's'} included</p>
-      <p className="ps-copy">The project manager countersigns next, and development starts.</p>
-    </SignOffDialog>}
-  </>;
 }
 
 /** After closure: what was accepted, and how new work is handled. */
