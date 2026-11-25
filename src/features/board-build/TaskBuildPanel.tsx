@@ -161,7 +161,7 @@ export const TaskBuildPanel: React.FC<TaskBuildPanelProps> = ({ issue, build, ca
   };
 
   if (!isDesktop) {
-    return <p className="text-[13px] text-content-muted">{role === 'dev' ? 'Open this task in Alpha desktop to plan and run its build.' : 'Assign this task to a developer. You can review shared task outcomes here.'}</p>;
+    return <p className="text-[13px] text-content-muted">{role === 'client' ? 'The team builds this task. You can review shared task outcomes here.' : 'Open this task in Alpha desktop to plan and run its build.'}</p>;
   }
 
   const specNote = specState === 'draft'
@@ -462,7 +462,7 @@ export const TaskBuildPanel: React.FC<TaskBuildPanelProps> = ({ issue, build, ca
                 </>
               )}
           </section>
-          {(role === 'dev' || role === 'admin') && snapshot && (
+          {can('run_builds') && snapshot && (
             <div className="flex max-h-[480px] min-h-0 flex-col rounded-md border border-divider">
                   <BuildReviewTab
                     projectId={issue.projectId}

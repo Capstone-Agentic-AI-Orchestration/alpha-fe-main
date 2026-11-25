@@ -17,9 +17,9 @@ import {
 const metricCard = 'rounded-2xl border border-divider bg-surface p-4';
 
 export const AnalyticsView: React.FC = () => {
-  const { analytics, workspaceLoading, localMode, role } = useApp();
+  const { analytics, workspaceLoading, localMode, can } = useApp();
   const [section, setSection] = useState<'operations' | 'ai_usage'>('operations');
-  const canViewAiUsage = role === 'dev';
+  const canViewAiUsage = can('run_agents');
   const activeSection = canViewAiUsage ? section : 'operations';
   const maxRuns = Math.max(...analytics.runTimeline.map(item => item.runs), 1);
 
