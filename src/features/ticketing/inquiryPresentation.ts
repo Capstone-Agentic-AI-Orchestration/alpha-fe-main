@@ -63,5 +63,5 @@ export function acceptOutcome(item: Pick<PmCentralIntakeItem, 'kind'>, workspace
   const where = workspaceName ?? 'this workspace';
   return item.kind === 'project_proposal'
     ? `Start a new project and Alpha creates it in ${where}, with its repositories if you choose, opens the request and lets this client see the project. Or add it to a project you already have.`
-    : `Start a new project, or add it to one you already have, and Alpha opens the request in ${where}. The sender's email is not verified, so they get no portal access until you invite them.`;
+    : `Start a new project, or add it to one you already have, and Alpha opens the request in ${where} and can email the sender an invitation to the client portal. They get access once they set a password.`;
 }

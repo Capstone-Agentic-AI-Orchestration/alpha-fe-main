@@ -367,6 +367,9 @@ const DEMO_INQUIRIES: PmCentralIntakeItem[] = [
   },
 ];
 
+/** Projects the PM preview offers under "Add to existing project". */
+export const pmPreviewProjects = [{ id: 'preview-project-ops', name: 'Operations dashboard', key: 'OPS' }] as const;
+
 /** Read-only shared inquiry transport used by the development PM preview. */
 export const pmPreviewIntakeApi = {
   async listCentralIntakes(_after: string | null = null, filter: 'pending' | 'handled' = 'pending'): Promise<PmCentralIntakePage> {
