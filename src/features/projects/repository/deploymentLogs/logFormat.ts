@@ -60,15 +60,6 @@ export function instanceTag(instance: string | null): string | null {
   return tail.slice(-5);
 }
 
-// Escape sequences a build tool colours its output with. Shown raw they are
-// noise; the line's level already carries the colour that matters. Built from
-// the ESC char code so the source carries no literal control character.
-const ANSI_PATTERN = new RegExp(`${String.fromCharCode(27)}\\[[0-9;?]*[ -/]*[@-~]`, 'g');
-
-export function stripAnsi(message: string): string {
-  return message.replace(ANSI_PATTERN, '');
-}
-
 /* ── Time range presets ─────────────────────────────────────────────────── */
 
 export type LogRangePreset = 'deploy' | '15m' | '1h' | '6h' | '24h' | '7d';

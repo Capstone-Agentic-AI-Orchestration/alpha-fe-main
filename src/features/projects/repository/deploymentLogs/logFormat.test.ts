@@ -5,7 +5,6 @@ import {
   instanceTag,
   rangeOptions,
   rangeWindow,
-  stripAnsi,
   timeZoneAbbreviation
 } from './logFormat';
 
@@ -42,12 +41,6 @@ describe('line display', () => {
     expect(instanceTag('srv-d1abc-5d8f9c7b6-x2k4j')).toBe('x2k4j');
     expect(instanceTag('web')).toBe('web');
     expect(instanceTag(null)).toBeNull();
-  });
-
-  it('strips terminal colour codes from a message', () => {
-    const esc = String.fromCharCode(27);
-    expect(stripAnsi(`${esc}[32m==> Build successful${esc}[0m`)).toBe('==> Build successful');
-    expect(stripAnsi('plain')).toBe('plain');
   });
 });
 

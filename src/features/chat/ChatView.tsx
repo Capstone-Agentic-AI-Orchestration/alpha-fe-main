@@ -65,6 +65,8 @@ import { isDesktop } from '@/shared/desktop';
 import { BoardChangesWaiting } from '@/features/board-agent/BoardChangesWaiting';
 import { apiService, userMessage } from '@/shared/services/apiService';
 import { runnerSocket } from '@/shared/services/runnerSocket';
+import { stripAnsi } from '@/shared/lib/ansi';
+import { useLiveReplyText } from './useLiveReplyText';
 import {
   AgentCall,
   AgentCallMode,
@@ -243,8 +245,8 @@ function ChatTurnActivityRow({
             {call.activities.length ? <ol className="space-y-2 border-l border-divider pl-3">
               {[...call.activities].reverse().map(activity => <li key={activity.id} className="relative text-[10px] leading-4 text-content-secondary">
                 <span className={`absolute -left-[17px] top-1.5 h-1.5 w-1.5 rounded-full ${activity.kind === 'error' ? 'bg-rose-400' : activity.kind === 'file_change' ? 'bg-emerald-400' : activity.kind === 'handoff' ? 'bg-amber-300' : 'bg-violet-300'}`} />
-                <span>{activity.toolName ? `${activity.toolName} · ` : ''}{activity.message}</span>
-                {activity.detail && <pre className="mt-1 whitespace-pre-wrap break-words rounded-md bg-well px-2 py-1.5 font-mono text-[9px] text-content-secondary">{activity.detail}</pre>}
+                <span>{activity.toolName ? `${activity.toolName} · ` : ''}{stripAnsi(activity.message)}</span>
+                {activity.detail && <pre className="mt-1 whitespace-pre-wrap break-words rounded-md bg-well px-2 py-1.5 font-mono text-[9px] text-content-secondary">{stripAnsi(activity.detail)}</pre>}
                 {!!activity.paths?.length && <div className="mt-1 flex flex-wrap gap-1.5">{activity.paths.map(file => <span key={file} className="inline-flex items-center gap-1 rounded bg-surface-raised px-1.5 py-1 text-left font-mono text-[9px] text-status-success hover:bg-surface-high"><FileCode2 className="h-3 w-3" />{file}</span>)}</div>}
               </li>)}
             </ol> : <p className="text-[10px] text-content-muted">Waiting for the first visible work update.</p>}
@@ -365,6 +367,9 @@ function OrchestratorBuildActivityRow({
       .catch(() => { if (!cancelled) setCountedFiles(null); });
     return () => { cancelled = true; };
   }, [projectId, runId, changedKey, status]);
+  // What the build's worktrees actually contain wins once read: agents' reports and planned
+  // paths can name files that were never changed.
+  const shownFiles = countedFiles ?? changedFiles.map(path => ({ path }));
   const currentTask = tasks.find(task => task.id === orchestration?.run.currentTaskId)
     ?? tasks.find(task => ['running', 'submitted'].includes(task.status));
   const currentAttempt = currentTask
@@ -483,7 +488,7 @@ function OrchestratorBuildActivityRow({
       </section>}
       <section className="space-y-2">
         <div className="text-[9px] font-semibold uppercase tracking-wider text-content-muted">Files changed</div>
-        {changedFiles.length ? <div className="flex flex-wrap gap-1.5">{changedFiles.map(file => <code key={file} className="max-w-full truncate rounded-md bg-well px-2 py-1 font-mono text-[9px] text-status-success">{file}</code>)}</div>
+        {shownFiles.length ? <div className="flex flex-wrap gap-1.5">{shownFiles.map(file => <code key={file.path} className="max-w-full truncate rounded-md bg-well px-2 py-1 font-mono text-[9px] text-status-success">{file.path}</code>)}</div>
           : <p className="text-[10px] text-content-muted">No files changed yet. File updates will appear here as specialists work.</p>}
       </section>
       <section className="space-y-2">
@@ -491,15 +496,15 @@ function OrchestratorBuildActivityRow({
         {activity.length > 0 ? <ol className="space-y-2 border-l border-divider pl-3">{activity.map(item => <li key={`${item.id}-${item.agentName}`} className="relative text-[10px] leading-4 text-content-secondary">
           <span className={`absolute -left-[17px] top-1.5 h-1.5 w-1.5 rounded-full ${item.kind === 'error' ? 'bg-rose-400' : item.kind === 'file_change' ? 'bg-emerald-400' : 'bg-violet-300'}`} />
           <div className="flex flex-wrap items-center gap-x-1.5"><span className="font-medium text-content">{item.agentName}</span><span className="text-content-muted">·</span><span className="text-content-muted">{item.toolName ?? item.kind.replace(/_/g, ' ')}</span>{item.isStreaming && <span className="inline-flex items-center gap-1 rounded border border-divider px-1 py-0.5 text-[8px] text-link"><span className="h-1 w-1 animate-pulse rounded-full bg-violet-200" />Live</span>}<time className="text-content-muted">{new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time></div>
-          <div className="mt-0.5 whitespace-pre-wrap break-words text-content-secondary">{item.message}</div>
-          {item.detail && <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap break-words rounded-md bg-well px-2 py-1.5 font-mono text-[9px] text-content-secondary">{item.detail}</pre>}
+          <div className="mt-0.5 whitespace-pre-wrap break-words text-content-secondary">{stripAnsi(item.message)}</div>
+          {item.detail && <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap break-words rounded-md bg-well px-2 py-1.5 font-mono text-[9px] text-content-secondary">{stripAnsi(item.detail)}</pre>}
           {!!item.paths?.length && <div className="mt-1 flex flex-wrap gap-1">{item.paths.map(file => <code key={file} className="max-w-full truncate rounded bg-surface-raised px-1.5 py-1 font-mono text-[9px] text-status-success">{file}</code>)}</div>}
         </li>)}</ol> : <p className="text-[10px] text-content-muted">{working ? 'The agent is starting. Its conversation, tool calls, and file edits will appear here.' : 'No agent actions were recorded for this build.'}</p>}
       </section>
 
     </div>}
   </div>
-  <ChangedFilesCard files={countedFiles?.length ? countedFiles : changedFiles.map(path => ({ path }))} onView={onViewChanges} />
+  <ChangedFilesCard files={shownFiles} onView={onViewChanges} />
   {orchestration && orchestration.run.id === runId && <BuildNextStepCard projectId={projectId} orchestration={orchestration} canApprove={canApprove}
     onReview={onOpenReview} onAskChanges={onAskChanges ?? onOpenReview}
     onApproved={async () => { await refreshAfterRecovery(); await onApproved?.(); }} />}
@@ -579,6 +584,18 @@ type SideTab =
   | { id: string; kind: 'review'; projectId: string; runId: string }
   | { id: string; kind: 'preview' }
   | { id: string; kind: 'changes'; projectId: string; runId: string };
+
+/** How a message sits in the transcript: the user's on the right in a bubble, Alpha's across the column. */
+const USER_MESSAGE_LAYOUT = {
+  row: 'flex w-full items-start gap-3 justify-end',
+  column: 'min-w-0 space-y-2 flex max-w-[80%] flex-col items-end',
+  bubble: 'text-sm leading-relaxed rounded-xl border border-divider bg-selected px-4 py-2.5 text-content'
+};
+const AGENT_MESSAGE_LAYOUT = {
+  row: 'flex w-full items-start gap-3',
+  column: 'min-w-0 space-y-2 flex-1',
+  bubble: 'text-sm leading-relaxed text-content'
+};
 
 export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNavigation = false }) => {
   const {
@@ -947,6 +964,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
   const latestUserMessage = [...currentMessages].reverse().find(message => message.senderType === 'user');
   const activeTurnMessageId = activeChatTurnCall?.messageId
     ?? (isAgentTyping && !/^\/build(?:\s|$)/i.test(latestUserMessage?.content.trim() ?? '') ? latestUserMessage?.id : undefined);
+  const liveReplyText = useLiveReplyText(activeThread?.id, isAgentTyping);
   const mentionSuggestions = useMemo(() => {
     if (!mentionQuery || isClient || activeTurnMessageId) return [];
     const query = mentionQuery.query.trim().toLowerCase();
@@ -2016,6 +2034,52 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
     </Card>
   );
 
+  /** What a message says: its text, or the card its kind calls for. */
+  const renderMessageBody = (message: ChatMessage, isUser: boolean) => {
+    if (message.isStreaming) return liveReplyText ? <div aria-busy="true"><MessageMarkdown content={liveReplyText} /><span aria-hidden="true" className="mt-1 inline-block h-2 w-2 rounded-full bg-content-muted motion-safe:animate-pulse" /></div> : <span className="flex items-center gap-2 text-xs text-link"><Circle className="h-2.5 w-2.5 fill-current animate-pulse" /> Responding…</span>;
+    if (isUser) return <div className="whitespace-pre-wrap break-words">{message.content}</div>;
+    if (message.messageType === 'build_proposal' || message.messageType === 'project_needed') return renderRouteProposal(message);
+    if (message.messageType === 'build_milestone') return <div className="flex items-start gap-2.5 py-2 text-xs text-content"><Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-link" /><div className="min-w-0"><div className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-link">Build update</div><MessageMarkdown content={message.content} /></div></div>;
+    if (message.messageType === 'build') return <div className="space-y-3"><div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-link"><Activity className="h-3.5 w-3.5" /> Orchestrator update</div><MessageMarkdown content={message.content} />{(() => {
+  const setupRequired = /review the project setup|project needs setup|configured model|available model|workspace identity|reconnect (?:this )?repository/i.test(message.content);
+  if (message.content.includes('Choose a codebase') || message.content.includes('Choose one repository')) {
+    return <button type="button" onClick={() => setRepositoryMenuOpen(true)} className="inline-flex items-center gap-1.5 px-3 py-2 text-xs text-status-warning"><FolderGit2 className="h-3.5 w-3.5" /> Choose codebases</button>;
+  }
+  return setupRequired ? <button type="button" onClick={openProjectSetup} className="px-3 py-2 text-xs text-content-secondary">Review project setup</button> : null;
+})()}</div>;
+    return <MessageMarkdown content={message.content} />;
+  };
+
+  /** Above a message: the time for the user's own, the sender for a client's view of Alpha. */
+  const renderMessageHeader = (message: ChatMessage, isUser: boolean) => {
+    if (isUser) return <time dateTime={message.timestamp} className="mb-1 block text-right text-[10px] text-content-muted">{formatMessageTime(message.timestamp)}</time>;
+    return isClient ? <div className="mb-1 flex flex-wrap items-baseline gap-2"><span className="font-semibold text-content">{message.senderName || 'Alpha'}</span><time dateTime={message.timestamp} className="text-[10px] text-content-muted">{formatMessageTime(message.timestamp)}</time></div> : null;
+  };
+
+  /** Under the user's message: skills, attachments, and the work Alpha did for it. */
+  const renderUserMessageExtras = (message: ChatMessage) => {
+    const turnCalls = callList.filter(item => item.origin === 'chat_turn' && item.messageId === message.id);
+    const turnIsActive = activeTurnMessageId === message.id;
+    return <>{canBoardRun && !boardRuns.active && asksForBoardRun(message.content) && <button type="button" onClick={() => setBoardRunDialogOpen(true)} className="mt-1 inline-flex items-center gap-1.5 rounded-lg border border-divider bg-surface-raised px-2.5 py-1 text-[11px] font-medium text-link hover:bg-surface-high">Start a board run for this…</button>}<ChatSkillTags skillIds={message.skillIds} skills={skills} /><MessageAttachments attachments={message.attachments} />{turnCalls.length ? <><ChatTurnActivityRow calls={turnCalls} agents={snapshot?.agents ?? []} handoff={currentMessages.find(item => item.id === message.id + '-handoff')?.content} /><ChangedFilesCard files={turnChangedFiles(turnCalls)} onView={() => { const edited = [...turnCalls].reverse().find(item => item.activities.some(activity => activity.kind === 'file_change')); if (edited) selectCall(edited.id); }} /></> : turnIsActive ? <div className="mt-2 rounded-xl border border-divider bg-surface-raised/75 px-3 py-2 text-[11px] text-link"><span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-violet-300" />Working in the background</div> : null}</>;
+  };
+
+  /** The live build card, once per build, under the message that started it. */
+  const renderBuildActivityRow = (message: ChatMessage) => {
+    if (message.messageType !== 'build' || !message.orchestrationRunId || !project?.id || !activeThread || activityMessageByRun.get(message.orchestrationRunId) !== message.id) return null;
+    return <OrchestratorBuildActivityRow projectId={project.id} runId={message.orchestrationRunId} threadId={activeThread.id} onOpenReview={() => openSavedBuildReview(message.orchestrationRunId!)} onViewChanges={() => openSideTab({ id: 'changes:' + message.orchestrationRunId, kind: 'changes', projectId: project.id, runId: message.orchestrationRunId! })} onWithdraw={canRouteBuild && message.id.endsWith('-build') ? () => void routeChatMessage(message.id.slice(0, -'-build'.length), 'answer') : undefined} withdrawing={routingMessageId === message.id.slice(0, -'-build'.length)} canApprove={can('publish_build')} onAskChanges={() => replyInComposer('Please change: ')} onApproved={refreshLiveBuild} stop={canStopBuild && liveBuild?.runId === message.orchestrationRunId ? { label: stopArmed ? 'Click again to stop' : stopBuildLabel, busy: Boolean(stoppingProjectRunId), onStop: () => void stopProjectBuild() } : undefined} />;
+  };
+
+  const renderTranscriptMessage = (message: ChatMessage) => {
+    const isUser = message.senderType === 'user';
+    if (!isClient && message.id.endsWith('-handoff') && callList.some(item => item.origin === 'chat_turn' && item.messageId === message.id.slice(0, -'-handoff'.length))) return null;
+    if (message.isStreaming && !isAgentTyping && !activeChatTurnCall) return null;
+    const call = message.agentCallId ? calls[message.agentCallId] : undefined;
+    if (message.agentCallId && !isUser) return call ? <div key={message.id} className="w-full">{renderCallCard(call, message)}<WorkUsageRow entries={entriesAtMessage(currentMessages, message.id, usage.snapshot?.entries ?? [])} now={usage.now} names={usageNames} /></div> : <div key={message.id} className="w-full rounded-xl border border-divider bg-surface-raised p-4 text-xs text-content-secondary">Loading agent call details…</div>;
+    if (message.senderType === 'system') return <div key={message.id} className="flex justify-center"><div className="max-w-2xl rounded-xl border border-divider bg-surface-raised px-4 py-2 text-xs text-content-secondary flex items-center gap-2"><Sparkles className="h-3.5 w-3.5 text-link" />{message.content}</div></div>;
+    const layout = isUser ? USER_MESSAGE_LAYOUT : AGENT_MESSAGE_LAYOUT;
+    return <div key={message.id} className={layout.row}><div className={layout.column}><div className={layout.bubble}>{renderMessageHeader(message, isUser)}{renderMessageBody(message, isUser)}</div>{isUser && renderUserMessageExtras(message)}{!isUser && renderBuildActivityRow(message)}<WorkUsageRow entries={entriesAtMessage(currentMessages, message.id, usage.snapshot?.entries ?? [])} now={usage.now} names={usageNames} />{previews.record && previewAnchor === message.id && <div className="mt-2"><WebPreviewCard record={previews.record} onOpen={openPreview} /></div>}{boardRunCards(message.id)}</div></div>;
+  };
+
   return (
     <PlanPanelContext.Provider value={isClient ? null : openPlanTab}>
     {inAppDialog}
@@ -2085,13 +2149,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
 
 
           {CHAT_ORCHESTRATOR_BAR_ENABLED && !isClient && <div className="relative z-20 shrink-0 px-5 pt-2 lg:px-7"><OrchestratorFlow calls={callList} agents={snapshot?.agents ?? []} isWorking={isAgentTyping} title={project?.name ?? 'Alpha'} selectedCallId={inspectedCall ? inspectedCallId : null} onSelectCall={selectCall} build={latestBuild ? { runId: latestBuild.runId, label: buildStatusLabel(latestBuild), running: latestBuild.running, status: latestBuild.status, agents: latestBuild.agents, handoffs: buildHandoffs(latestBuild.orchestration) } : null} sidePanelOpen={Boolean(panelVisible)} selectedBuildAgentId={inspectedBuildAgent ? inspectedBuildAgentId : null} onSelectBuildAgent={selectBuildAgent} roster={workspaceAgents} runtimes={runtimes} canEditAgents={can('manage_agents')} onUpdateAgent={updateAgent} action={orchestratorAction} /></div>}
-          <div ref={transcriptRef} onScroll={onScroll} aria-label="Conversation messages" style={{ paddingBottom: composerHeight + 120 }} className={`flex-1 min-h-0 overflow-y-auto overscroll-contain p-5 lg:p-7 [overflow-anchor:none] [mask-image:linear-gradient(to_bottom,transparent,black_20px)] `}><div className={'mx-auto w-full max-w-6xl space-y-5 ' + (currentMessages.length === 0 ? 'h-full' : '')}>{currentMessages.length === 0 && activeTranscript === 'loading' ? <LoadingRows label="Loading messages" layout="conversation" /> : currentMessages.length === 0 && activeTranscript === 'error' && activeThread ? <div role="alert" className="space-y-2 py-4 text-sm text-content-secondary"><p>Could not load this conversation.</p><button type="button" className="text-link" onClick={() => loadTranscript(activeThread.id)}>Retry loading messages</button></div> : currentMessages.length === 0 ? <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-4"><div className="h-12 w-12 rounded-2xl border border-divider bg-selected flex items-center justify-center"><Sparkles className="h-6 w-6 text-link" /></div><div className="space-y-1.5"><h3 className="text-base font-semibold text-content">{isClient ? `Message ${pmName}` : 'Start a project conversation'}</h3><p className="text-xs text-content-muted max-w-md leading-relaxed">{isClient ? `${pmName} manages your project and can help with scope, progress, and timing.` : project ? 'Ask a question or describe a product change. For a change, Alpha plans it as the Orchestrator and waits for your approval before any code changes.' : 'Ask Alpha anything. Choose a project above when you want Alpha to plan a build in its codebases.'}</p></div></div> : currentMessages.map(message => { const isUser = message.senderType === 'user'; const isSystem = message.senderType === 'system'; const call = message.agentCallId ? calls[message.agentCallId] : undefined; const turnCalls = callList.filter(item => item.origin === 'chat_turn' && item.messageId === message.id); const turnIsActive = activeTurnMessageId === message.id; if (!isClient && message.id.endsWith('-handoff') && callList.some(item => item.origin === 'chat_turn' && item.messageId === message.id.slice(0, -'-handoff'.length))) return null; if (message.isStreaming && !isAgentTyping && !activeChatTurnCall) return null; if (message.agentCallId && !isUser && call) return <div key={message.id} className="w-full">{renderCallCard(call, message)}<WorkUsageRow entries={entriesAtMessage(currentMessages, message.id, usage.snapshot?.entries ?? [])} now={usage.now} names={usageNames} /></div>; if (message.agentCallId && !isUser && !call) return <div key={message.id} className="w-full rounded-xl border border-divider bg-surface-raised p-4 text-xs text-content-secondary">Loading agent call details…</div>; if (isSystem) return <div key={message.id} className="flex justify-center"><div className="max-w-2xl rounded-xl border border-divider bg-surface-raised px-4 py-2 text-xs text-content-secondary flex items-center gap-2"><Sparkles className="h-3.5 w-3.5 text-link" />{message.content}</div></div>; return <div key={message.id} className={`flex w-full items-start gap-3 ${isUser ? 'justify-end' : ''}`}><div className={`min-w-0 space-y-2 ${isUser ? 'flex max-w-[80%] flex-col items-end' : 'flex-1'}`}><div className={`text-sm leading-relaxed ${isUser ? 'rounded-xl border border-divider bg-selected px-4 py-2.5 text-content' : 'text-content'}`}>{isUser ? <time dateTime={message.timestamp} className="mb-1 block text-right text-[10px] text-content-muted">{formatMessageTime(message.timestamp)}</time> : isClient ? <div className="mb-1 flex flex-wrap items-baseline gap-2"><span className="font-semibold text-content">{message.senderName || 'Alpha'}</span><time dateTime={message.timestamp} className="text-[10px] text-content-muted">{formatMessageTime(message.timestamp)}</time></div> : null}{message.isStreaming ? <span className="flex items-center gap-2 text-xs text-link"><Circle className="h-2.5 w-2.5 fill-current animate-pulse" /> Responding…</span> : isUser ? <div className="whitespace-pre-wrap break-words">{message.content}</div> : (message.messageType === 'build_proposal' || message.messageType === 'project_needed') ? renderRouteProposal(message)  : message.messageType === 'build_milestone' ? <div className="flex items-start gap-2.5 py-2 text-xs text-content"><Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-link" /><div className="min-w-0"><div className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-link">Build update</div><MessageMarkdown content={message.content} /></div></div>: message.messageType === 'build' ? <div className="space-y-3"><div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-link"><Activity className="h-3.5 w-3.5" /> Orchestrator update</div><MessageMarkdown content={message.content} />{(() => {
-  const setupRequired = /review the project setup|project needs setup|configured model|available model|workspace identity|reconnect (?:this )?repository/i.test(message.content);
-  if (message.content.includes('Choose a codebase') || message.content.includes('Choose one repository')) {
-    return <button type="button" onClick={() => setRepositoryMenuOpen(true)} className="inline-flex items-center gap-1.5 px-3 py-2 text-xs text-status-warning"><FolderGit2 className="h-3.5 w-3.5" /> Choose codebases</button>;
-  }
-  return setupRequired ? <button type="button" onClick={openProjectSetup} className="px-3 py-2 text-xs text-content-secondary">Review project setup</button> : null;
-})()}</div> : <MessageMarkdown content={message.content} />}</div>{isUser && <>{canBoardRun && !boardRuns.active && asksForBoardRun(message.content) && <button type="button" onClick={() => setBoardRunDialogOpen(true)} className="mt-1 inline-flex items-center gap-1.5 rounded-lg border border-divider bg-surface-raised px-2.5 py-1 text-[11px] font-medium text-link hover:bg-surface-high">Start a board run for this…</button>}<ChatSkillTags skillIds={message.skillIds} skills={skills} /><MessageAttachments attachments={message.attachments} />{turnCalls.length ? <><ChatTurnActivityRow calls={turnCalls} agents={snapshot?.agents ?? []} handoff={currentMessages.find(item => item.id === message.id + '-handoff')?.content} /><ChangedFilesCard files={turnChangedFiles(turnCalls)} onView={() => { const edited = [...turnCalls].reverse().find(item => item.activities.some(activity => activity.kind === 'file_change')); if (edited) selectCall(edited.id); }} /></> : turnIsActive ? <div className="mt-2 rounded-xl border border-divider bg-surface-raised/75 px-3 py-2 text-[11px] text-link"><span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-violet-300" />Working in the background</div> : null}</>}{!isUser && message.messageType === 'build' && message.orchestrationRunId && project?.id && activityMessageByRun.get(message.orchestrationRunId) === message.id && <OrchestratorBuildActivityRow projectId={project.id} runId={message.orchestrationRunId} threadId={activeThread.id} onOpenReview={() => openSavedBuildReview(message.orchestrationRunId!)} onViewChanges={() => openSideTab({ id: 'changes:' + message.orchestrationRunId, kind: 'changes', projectId: project.id, runId: message.orchestrationRunId! })} onWithdraw={canRouteBuild && message.id.endsWith('-build') ? () => void routeChatMessage(message.id.slice(0, -'-build'.length), 'answer') : undefined} withdrawing={routingMessageId === message.id.slice(0, -'-build'.length)} canApprove={can('publish_build')} onAskChanges={() => replyInComposer('Please change: ')} onApproved={refreshLiveBuild} stop={canStopBuild && liveBuild?.runId === message.orchestrationRunId ? { label: stopArmed ? 'Click again to stop' : stopBuildLabel, busy: Boolean(stoppingProjectRunId), onStop: () => void stopProjectBuild() } : undefined} />}<WorkUsageRow entries={entriesAtMessage(currentMessages, message.id, usage.snapshot?.entries ?? [])} now={usage.now} names={usageNames} />{previews.record && previewAnchor === message.id && <div className="mt-2"><WebPreviewCard record={previews.record} onOpen={openPreview} /></div>}{boardRunCards(message.id)}</div></div>; })}{previews.record && !previewAnchor && <WebPreviewCard record={previews.record} onOpen={openPreview} />}{boardRunCards(null)}</div></div>
+          <div ref={transcriptRef} onScroll={onScroll} aria-label="Conversation messages" style={{ paddingBottom: composerHeight + 120 }} className={`flex-1 min-h-0 overflow-y-auto overscroll-contain p-5 lg:p-7 [overflow-anchor:none] [mask-image:linear-gradient(to_bottom,transparent,black_20px)] `}><div className={'mx-auto w-full max-w-6xl space-y-5 ' + (currentMessages.length === 0 ? 'h-full' : '')}>{currentMessages.length === 0 && activeTranscript === 'loading' ? <LoadingRows label="Loading messages" layout="conversation" /> : currentMessages.length === 0 && activeTranscript === 'error' && activeThread ? <div role="alert" className="space-y-2 py-4 text-sm text-content-secondary"><p>Could not load this conversation.</p><button type="button" className="text-link" onClick={() => loadTranscript(activeThread.id)}>Retry loading messages</button></div> : currentMessages.length === 0 ? <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-4"><div className="h-12 w-12 rounded-2xl border border-divider bg-selected flex items-center justify-center"><Sparkles className="h-6 w-6 text-link" /></div><div className="space-y-1.5"><h3 className="text-base font-semibold text-content">{isClient ? `Message ${pmName}` : 'Start a project conversation'}</h3><p className="text-xs text-content-muted max-w-md leading-relaxed">{isClient ? `${pmName} manages your project and can help with scope, progress, and timing.` : project ? 'Ask a question or describe a product change. For a change, Alpha plans it as the Orchestrator and waits for your approval before any code changes.' : 'Ask Alpha anything. Choose a project above when you want Alpha to plan a build in its codebases.'}</p></div></div> : currentMessages.map(renderTranscriptMessage)}{previews.record && !previewAnchor && <WebPreviewCard record={previews.record} onOpen={openPreview} />}{boardRunCards(null)}</div></div>
 
           <div ref={composerRef} className="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-shell px-5 pb-4 pt-2 before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-10 before:bg-gradient-to-t before:from-shell before:to-transparent before:content-[''] lg:px-7 lg:pb-6">
             <div className="pointer-events-auto mx-auto w-full max-w-6xl space-y-2">
