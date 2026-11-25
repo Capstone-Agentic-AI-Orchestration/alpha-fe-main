@@ -24,6 +24,7 @@ import { ProjectMemorySection } from '@/features/projects/ProjectMemorySection';
 import { ProjectAutonomySection } from '@/features/projects/ProjectAutonomySection';
 import { IssuesView } from '@/features/issues/IssuesView';
 import { ProjectRepositoryView } from '@/features/projects/repository/ProjectRepositoryView';
+import { ProjectStageStrip } from '@/features/projects/ProjectStageStrip';
 import { ProjectClientPreviewPanel } from '@/features/projects/ProjectClientPreviewPanel';
 import { ProjectBuildReviewView } from '@/features/project-build-review/ProjectBuildReviewView';
 import { PmProjectQaStudio } from '@/features/ticketing/PmProjectQaStudio';
@@ -226,6 +227,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
 
         <ProjectRepositoryView
           renderHeader={tabs => (
+        <>
         <div className="flex shrink-0 items-center gap-3 bg-shell px-4 py-2 sm:px-5">
 
           {/* Left: Breadcrumbs navigation */}
@@ -265,6 +267,9 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
             </button>
           )}
         </div>
+        {/* The client stage leads a PM's project: where it is and whose turn it is. */}
+        {role === 'pm' && <ProjectStageStrip projectId={selectedProject.id} />}
+        </>
           )}
           qaStudio={role==='pm'?<PmProjectQaStudio key={`${activeWorkspaceId}:${selectedProject.id}`} projectId={selectedProject.id} projectName={selectedProject.name}
             feedback={clientId=><ProjectClientPreviewPanel key={clientId} projectId={selectedProject.id} canManage={canEditProjects} conversationOnly requestedClientId={clientId}/>}/>:undefined}

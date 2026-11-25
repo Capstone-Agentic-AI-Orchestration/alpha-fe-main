@@ -21,7 +21,7 @@ const withoutHiddenChat = (tabs: NavigationTab[]) => tabs.filter(tab => CHAT_TAB
 const existing: Record<UserRole, NavigationTab[]> = {
   client: ['portal', 'intake', 'settings'],
   dev: ['issues', 'attention', 'projects', 'agents', 'skills', 'chat', 'settings'],
-  pm: ['clients', 'attention', 'inquiries', 'projects', 'issues', 'chat', 'agents', 'skills', 'analytics', 'settings'],
+  pm: ['clients', 'attention', 'inbox', 'inquiries', 'projects', 'issues', 'chat', 'agents', 'skills', 'analytics', 'settings'],
   admin: ['issues', 'attention', 'projects', 'chat', 'agents', 'skills', 'analytics', 'operations', 'settings'],
 };
 /**
@@ -31,7 +31,7 @@ const existing: Record<UserRole, NavigationTab[]> = {
 const existingVisible: Record<UserRole, NavigationTab[]> = {
   client: ['portal', 'intake', 'settings'],
   dev: ['attention', 'chat', 'issues', 'projects', 'agents', 'skills', 'settings'],
-  pm: ['attention', 'chat', 'clients', 'issues', 'projects', 'inquiries', 'agents', 'skills', 'analytics', 'settings'],
+  pm: ['attention', 'chat', 'clients', 'issues', 'projects', 'inbox', 'inquiries', 'agents', 'skills', 'analytics', 'settings'],
   admin: ['attention', 'chat', 'issues', 'projects', 'agents', 'skills', 'analytics', 'operations', 'settings'],
 };
 /** PMs start with their clients; the project conversation owns each project's tickets. */
@@ -62,7 +62,7 @@ describe('existing navigation compatibility', () => {
     expect(ROLE_NAV.pm).toContain('inquiries');
     expect(sectionsFor('pm').flatMap(group => group.items.map(item => item.id))).not.toContain('tickets');
     expect(sectionsFor('pm').find(group => group.section.id === 'clients')?.items.map(item => item.id)).toEqual(['clients']);
-    expect(sectionsFor('pm').find(group => group.section.id === 'requests')?.items.map(item => item.id)).toEqual(['inquiries']);
+    expect(sectionsFor('pm').find(group => group.section.id === 'requests')?.items.map(item => item.id)).toEqual(['inbox', 'inquiries']);
     expect(sectionsFor('pm').flatMap(group => group.items.map(item => item.id))).toContain('inquiries');
     for (const role of ['client', 'dev', 'admin'] as const) {
       expect(ROLE_NAV[role]).not.toContain('tickets');
@@ -171,7 +171,7 @@ describe('Clients section for project managers', () => {
   const ids = (role: UserRole, section: string) => sectionsFor(role).find(group => group.section.id === section)?.items.map(item => item.id) ?? [];
   it('keeps clients, inquiries, tasks, and projects in their own navigation groups', () => {
     expect(ids('pm', 'clients')).toEqual(['clients']);
-    expect(ids('pm', 'requests')).toEqual(['inquiries']);
+    expect(ids('pm', 'requests')).toEqual(['inbox', 'inquiries']);
     expect(ids('pm', 'projects')).toEqual(['issues', 'projects']);
     expect(sectionsFor('pm').map(group => group.section.id)).not.toContain('delivery');
   });

@@ -36,6 +36,7 @@ import { DocumentsView } from '@/features/delivery/DocumentsView';
 import { PM_CLIENTS_REFRESH_EVENT, PmClientsPage } from '@/features/ticketing/PmClientsPage';
 import { PmInquiriesPage } from '@/features/ticketing/PmInquiriesPage';
 import { AttentionView } from '@/features/attention/AttentionView';
+import { PmInboxView } from '@/features/pm-inbox/PmInboxView';
 import { NavigationTab } from '@/shared/types';
 // Whether this is the packaged desktop app rather than a browser tab, read from
 // the preload bridge. Shared with the settings panel rather than defined twice.
@@ -59,6 +60,7 @@ const WorkspaceTabView: React.FC<{ view: NavigationTab }> = ({ view }) => {
   let content: React.ReactNode;
   switch (view) {
     case 'attention': content = <AttentionView />; break;
+    case 'inbox': content = <PmInboxView />; break;
     case 'portal': content = <ClientPortalView />; break;
     case 'intake': content = <IntakeWizardView />; break;
     case 'documents': content = <DocumentsView />; break;
