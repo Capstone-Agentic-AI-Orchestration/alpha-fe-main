@@ -89,7 +89,7 @@ export function defaultModelFor(runtimes: RuntimeEngine[], provider: ModelProvid
  */
 export function modelMaker(modelName: string | undefined): string | null {
   const id = (modelName ?? '').toLowerCase().split('/').pop() ?? '';
-  if (/^(claude|opus|sonnet|haiku)/.test(id)) return 'Anthropic';
+  if (/^(claude|opus|sonnet|haiku|fable)/.test(id)) return 'Anthropic';
   if (/^(gemini|gemma)/.test(id)) return 'Google';
   if (/^(gpt|o\d|codex|chatgpt|text-embedding)/.test(id)) return 'OpenAI';
   if (id.startsWith('deepseek')) return 'DeepSeek';
