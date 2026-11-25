@@ -67,21 +67,18 @@ export interface PmConversationRailProps {
   /** Whether a preview is shared with the client; undefined hides the card. */
   previewShared?: boolean;
   ticketsTitle: string;
-  /** Progress for the selected ticket, shown between the Tickets heading and its list. */
-  progress?: ReactNode;
   tickets: ReactNode;
   selected?: ReactNode;
 }
 
 /** Tickets first, followed by project-level context. */
-export function PmConversationRail({ projectName, stage, previewShared, ticketsTitle, progress, tickets, selected }: Readonly<PmConversationRailProps>) {
+export function PmConversationRail({ projectName, stage, previewShared, ticketsTitle, tickets, selected }: Readonly<PmConversationRailProps>) {
   return <aside className="pm-rail" aria-label={`Project tickets and details for ${projectName}`}>
     <section className="pm-rail-tickets" aria-label="Tickets">
       <h2 className="pm-rail-card__head">
         <ListChecks size={16} className="pm-rail-card__icon" aria-hidden="true" />
         <span>{ticketsTitle}</span>
       </h2>
-      {progress}
       {tickets}
     </section>
     {selected}

@@ -19,7 +19,7 @@ import { PmScopeProposalForm, type PmScopeProposalDraft } from './PmScopeProposa
 import { PmWorkHandoffForm, type PmWorkHandoffDraft } from './PmWorkHandoffForm';
 import { PmProjectLinkForm, type PmProjectLinkDraft } from './PmProjectLinkForm';
 import { pmTicketNextAction } from './pmTicketNextAction';
-import { pmNextStep, type PmStepAction } from './pmNextStep';
+import { pmNextStep, pmProjectUsesChecklist, type PmStepAction } from './pmNextStep';
 import { canAuthorizeTicketWork } from './pmWorkHandoff';
 import { PmCorrectionForm } from './PmCorrectionForm';
 import { canAssessTicketDelivery, canCloseAcceptedTicket, canShareAssessedDelivery, pmCorrectionCommand, pmCorrectionMode, type PmCorrectionDraft } from './pmReview';
@@ -154,7 +154,7 @@ export function PmContactVerification({ verification }: { verification: unknown 
 
 // eslint-disable-next-line sonarjs/cognitive-complexity -- existing ticket workflow and queue view
 export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocumentsApi, intakeEnabled = true, workflowActions = 'all', communicationEnabled = false, refreshToken, fixedClientGroupKey, onOpenClient,
-  initialSelectedId: selectedId = null, ticketReference, renderRequestConversation, workflowReference, onWorkflowReply, onWorkflowChanged }: {
+  initialSelectedId: selectedId = null, ticketReference, renderRequestConversation }: {
   api?: typeof pmTicketApi;
   /**
    * The conversation shown beside an open request instead of the request's own
@@ -185,10 +185,6 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
   /** Open this request once the queue has loaded it, as from a client's Overview. */
   initialSelectedId?: string | null;
   ticketReference?: string;
-  /** Render only the selected ticket’s workflow within its project conversation. */
-  workflowReference?: string;
-  onWorkflowReply?: (kind: 'reply' | 'request_details') => void;
-  onWorkflowChanged?: () => void;
 } = {}) {
   const [queue, setQueue] = useState<PmTicketQueuePage | null>(null);
   const [detail, setDetail] = useState<PmTicketDetail | null>(null);
@@ -261,10 +257,9 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
     setQueueLoading(true);
     setQueueError('');
     try {
-      const search = workflowReference ?? ticketReference;
       let after: string | undefined;
       do {
-        const result = await api.list({ limit: 50, filter: 'all', search, after, clientGroupKey: fixedClientGroupKey });
+        const result = await api.list({ limit: 50, filter: 'all', search: ticketReference, after, clientGroupKey: fixedClientGroupKey });
         if (generation !== queueGeneration.current) return;
         const item = result.items.find(ticket => ticket.id === selectedId);
         if (item || !result.nextCursor || result.nextCursor === after) {
@@ -281,7 +276,7 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
     } finally {
       if (generation === queueGeneration.current) setQueueLoading(false);
     }
-  }, [api, selectedId, fixedClientGroupKey, intakeEnabled, ticketReference, workflowReference]);
+  }, [api, selectedId, fixedClientGroupKey, intakeEnabled, ticketReference]);
 
   useEffect(() => { void loadQueue(); }, [loadQueue, refreshVersion, refreshToken]);
 
@@ -348,7 +343,7 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
   }, [api, selectedId, selectedQueueItem?.internal.clientAccessActive, refreshVersion, refreshToken]);
 
   useEffect(() => {
-    if (workflowReference || !selectedId || panel !== 'conversation' || !selectedQueueItem) return;
+    if (!selectedId || panel !== 'conversation' || !selectedQueueItem) return;
     let current = true;
     if (!selectedQueueItem.internal.clientAccessActive) {
       setMessages([]); setMessageCursor(null); setHistoryError(''); setHistoryLoading(false);
@@ -363,10 +358,10 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
       if (current) setHistoryLoading(false);
     });
     return () => { current = false; };
-  }, [api, selectedId, panel, selectedQueueItem?.internal.clientAccessActive, selectedQueueItem?.updatedAt, refreshVersion, refreshToken, workflowReference]);
+  }, [api, selectedId, panel, selectedQueueItem?.internal.clientAccessActive, selectedQueueItem?.updatedAt, refreshVersion, refreshToken]);
 
   useEffect(() => {
-    if (workflowReference || !selectedId || panel !== 'notes' || !selectedQueueItem) return;
+    if (!selectedId || panel !== 'notes' || !selectedQueueItem) return;
     let current = true;
     setHistoryError(''); setHistoryLoading(true);
     api.getNotes(selectedId).then(page => {
@@ -377,11 +372,10 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
       if (current) setHistoryLoading(false);
     });
     return () => { current = false; };
-  }, [api, selectedId, panel, refreshVersion, refreshToken, workflowReference]);
+  }, [api, selectedId, panel, refreshVersion, refreshToken]);
 
 
   const refreshAll = () => {
-    onWorkflowChanged?.();
     historyGeneration.current += 1;
     setHistoryLoading(false);
     setRefreshVersion(version => version + 1);
@@ -572,9 +566,7 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
 
 
   async function submitScopeProposal(draftValue: PmScopeProposalDraft) {
-    if (workflowActions === 'none' || !detail || !selectedQueueItem?.internal.clientAccessActive || !detail.writesAvailable || pending
-      || !['received', 'under_review', 'awaiting_client'].includes(detail.status)
-      || detail.internal.authorizedScopeVersionId || detail.internal.requiredIssueIds.length > 0) return;
+    if (!detail || !canProposeScope || writing || pending) return;
     const inputValue: PmTicketScopeProposalInput = {
       schemaVersion: 1,
       operationId: crypto.randomUUID(),
@@ -687,6 +679,7 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
     && detail.writesAvailable && !detail.internal.authorizedScopeVersionId);
   const canProposeScope = Boolean(detail && selectedQueueItem
     && (workflowActions === 'all' || workflowActions === 'review_scope')
+    && !pmProjectUsesChecklist(detail)
     && detail.writesAvailable && selectedQueueItem.internal.clientAccessActive
     && ['received', 'under_review', 'awaiting_client'].includes(detail.status)
     && !detail.internal.authorizedScopeVersionId && detail.internal.requiredIssueIds.length === 0);
@@ -759,7 +752,7 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
       ticket={detail} clientAccessActive={selectedQueueItem.internal.clientAccessActive} disabled={writing || Boolean(pending)} onAssess={assessAndShareDelivery} onPrepared={refreshAll} /></div>}
       {deliveryReviewOpen && workflowActions === 'all' && detail.internal.deliveryAssessment && <div className="pm-tickets__action-form"><PmDeliveryReview key={JSON.stringify([detail.id, detail.version, detail.internal.deliveryAssessment.id, detail.internal.deliveryAssessment.pinnedAssetId])}
       ticket={detail} clientAccessActive={selectedQueueItem.internal.clientAccessActive} disabled={writing || Boolean(pending)} onShare={shareAssessedDelivery} /></div>}
-      {scopeComposerOpen && <div className="pm-tickets__action-form">
+      {scopeComposerOpen && canProposeScope && <div className="pm-tickets__action-form">
       <PmScopeProposalForm existingScopeAgreed={detail.scope?.agreed === true} disabled={writing || Boolean(pending)} onCancel={() => setScopeComposerOpen(false)} onSubmit={draftValue => void submitScopeProposal(draftValue)} />
       </div>}
       {handoffOpen && canAuthorizeTicketWork(detail, selectedQueueItem.internal.clientAccessActive) && <div className="pm-tickets__action-form">
@@ -785,7 +778,6 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
 
   function focusComposer(action: 'reply' | 'request_details' = 'reply') {
     setActionMenuOpen(false);
-    if (onWorkflowReply) { onWorkflowReply(action); return; }
     setMessageAction(action);
     setPanel('conversation'); setTicketSection('conversation');
     window.setTimeout(() => document.getElementById('ticket-conversation-draft')?.focus(), 0);
@@ -947,18 +939,6 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
       if (succeeded && ['correction authorization', 'accepted ticket closure'].includes(operation.label)) setReviewAction(null);
     }} disabled={writing} className={secondary}>{writing ? 'Checking…' : 'Check and retry'}</button>
   </div>;
-
-  if (workflowReference) return <section className="pm-tickets pm-tickets--embedded-workflow" ref={detailsElement} aria-label="Ticket workflow">
-    {queueError && <p role="alert" className="pm-tickets__error">{queueError} <button type="button" onClick={() => void loadQueue()}>Retry</button></p>}
-    {detailError && <p role="alert" className="pm-tickets__error">{detailError} <button type="button" onClick={() => setRefreshVersion(version => version + 1)}>Retry</button></p>}
-    {writeError && <p role="alert" className="pm-tickets__error">{writeError}</p>}
-    {invitationEmailError && <p role="alert" className="pm-tickets__error">{invitationEmailError}</p>}
-    {pendingWrite}
-    {(queuePending || detailLoading) && !detail && !queueError && !detailError && <p role="status" className="pm-rail-note">Loading ticket actions…</p>}
-    {!queuePending && !detailLoading && !queueError && !detailError && !stepBar && <p className="pm-rail-note">No ticket actions available.</p>}
-    {stepBar}
-    {renderStepForms()}
-  </section>;
 
   return <div className="pm-tickets pm-tickets--ticket-open pm-tickets--detail-only">
     <div className="pm-tickets__main">

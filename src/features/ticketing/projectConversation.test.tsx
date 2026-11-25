@@ -9,6 +9,8 @@ import { PmClientsView } from './PmClientsPage';
 import type { PmClientSummary } from './pmApi';
 import { clientIdFromKey } from './PmClientConversation';
 import { PmConversationRail } from './PmConversationRail';
+import { PmSelectedTicket } from './PmRequestContext';
+import { pmPreviewApi, pmPreviewDocumentsApi } from './ticketingPreviewFixtures';
 
 const request = { ticketId: 't-1', reference: 'TKT-1', title: 'Add a contact form' };
 const timeline = { items: [
@@ -21,6 +23,28 @@ const timeline = { items: [
 const openRequest: ConversationRequest = { ticketId: 't-1', workspaceId: 'w', reference: 'TKT-1', title: 'Add a contact form',
   description: 'A form on the About page.', ticketStatus: 'under_review', checklist: 'in_progress', doneBy: null, doneAt: null,
   createdAt: '2026-11-01T10:00:00Z', linkedTasks: [{ issueId: 'i-1', identifier: 'WEB-4', title: 'Build the form', status: 'todo' }] };
+
+describe('PM conversation request details', () => {
+  it('keeps workflow access for existing plans and gives ordinary requests checklist actions', async () => {
+    const active = await pmPreviewApi.get('preview-ticket-1042');
+    const render = (detail: typeof active) => renderToStaticMarkup(<PmSelectedTicket
+      documentsApi={pmPreviewDocumentsApi} request={openRequest} clientName="Client" detail={detail}
+      error="" onOpenWorkflow={() => undefined} actions={<><button>Mark done</button><button>Create task</button></>}
+    />);
+    const activeHtml = render(active);
+    expect(activeHtml).toContain('Open request workflow');
+    expect(activeHtml).not.toContain('Ticket steps');
+    expect(activeHtml).not.toContain('Send plan');
+
+    const ordinaryHtml = render({ ...active, status: 'received', readOnly: false, writesAvailable: true, scope: null,
+      internal: { ...active.internal, scopeVersion: null, authorizedScopeVersionId: null, requiredIssueIds: [] } });
+    expect(ordinaryHtml).toContain('Mark done');
+    expect(ordinaryHtml).toContain('Create task');
+    expect(ordinaryHtml).toContain('Manage request');
+    expect(ordinaryHtml).not.toContain('Open request workflow');
+    expect(ordinaryHtml).not.toContain('Send plan');
+  });
+});
 
 describe('project conversation data', () => {
   it('parses the conversation and rejects malformed rows', () => {

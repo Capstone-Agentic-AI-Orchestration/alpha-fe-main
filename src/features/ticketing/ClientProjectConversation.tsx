@@ -6,7 +6,7 @@ import { ClientTicketApiError, clientTicketApi, type ClientProject, type ClientT
 import { ClientRequestProgress, ClientRequestRail, CollapsibleRailCard, type ClientRequestRailProps } from './ClientTicketDetail';
 import { ProjectPreviewFrame } from './ClientProjectPreview';
 import { ConversationTicketPicker, ProjectConversationChat, openRequestCount, useConversationJump, type ConversationAbout } from './ProjectConversationView';
-import { withUpdatedRequest, type ConversationItem, type ConversationRequest } from './projectConversation';
+import { withUpdatedRequest, type ConversationItem, type ConversationRequest, type RequestChecklistStatus } from './projectConversation';
 import type { ClientProjectView } from './clientWorkspaceTabs';
 import { useProjectStage } from './useProjectStage';
 import { ClientStagePanel } from './ClientStagePanel';
@@ -225,8 +225,14 @@ export function ClientProjectConversation(props: Readonly<ClientProjectConversat
       ? <ConversationTicketPicker noun="request" requests={conversation.requests} selectedTicketId={selectedTicketId} focusTicketId={selectedTicketId}
         onSelect={item => pick(item.ticketId)} />
       : <p className="cx-project-rail-note">No requests for this project yet.</p>;
-  const selectedProgress = request.ticket && request.ticket.id === selectedTicketId
-    ? <ClientRequestProgress ticket={request.ticket} workflowActionsDisabled={props.rail.workflowActionsDisabled} /> : null;
+  const selectedTicket = request.ticket?.id === selectedTicketId ? request.ticket : null;
+  const hasDeliveryWorkflow = selectedTicket && (selectedTicket.scope || selectedTicket.delivery
+    || selectedTicket.requestedAction === 'agree_scope' || selectedTicket.requestedAction === 'review_result');
+  const checklist = selectedTicket && !hasDeliveryWorkflow && selectedTicket.status !== 'on_hold'
+    ? conversation.requests?.find(item => item.ticketId === selectedTicketId)?.checklist ?? 'open'
+    : undefined;
+  const selectedProgress = selectedTicket && hasDeliveryWorkflow
+    ? <ClientRequestProgress ticket={selectedTicket} workflowActionsDisabled={props.rail.workflowActionsDisabled} /> : null;
   const newRequest = props.requestForm && <section className="cx-project-new-request">
     <h2>New request</h2>{props.requestForm}
   </section>;
@@ -234,7 +240,7 @@ export function ClientProjectConversation(props: Readonly<ClientProjectConversat
     <ClientStagePanel api={api} project={project} summary={stageSummary} busy={stage.busy} actionError={stage.actionError}
       readOnly={props.stageReadOnly ?? readOnly} run={stage.run} />
   </CollapsibleRailCard>;
-  const picked = <PickedRequest selectedTicketId={selectedTicketId} request={request} rail={props.rail} />;
+  const picked = <PickedRequest selectedTicketId={selectedTicketId} request={request} rail={props.rail} checklist={checklist} />;
   const requestsPanel = <div className="cx-project-rail-content">
     <section className="cx-project-ticket-list" aria-label="Requests">
       <h2><ListChecks size={16} aria-hidden="true" /><span>{requestsTitle}</span></h2>
@@ -314,9 +320,10 @@ function PreviewNotShared({ projectId, onAsk }: Readonly<{ projectId: string; on
 }
 
 /** The picked request's panel, a loading state while it arrives, or a hint to pick one. */
-function PickedRequest({ selectedTicketId, request, rail }: Readonly<Pick<ClientProjectConversationProps, 'selectedTicketId' | 'request' | 'rail'>>) {
-  if (request.ticket && request.ticket.id === selectedTicketId) return <ClientRequestRail {...rail} ticket={request.ticket} projectPanel />;
-  if (!selectedTicketId) return <p className="cx-request-note cx-reqrail-hint">Pick a request to see its progress, plan or result, files and details.</p>;
+function PickedRequest({ selectedTicketId, request, rail, checklist }: Readonly<Pick<ClientProjectConversationProps, 'selectedTicketId' | 'request' | 'rail'>
+  & { checklist?: RequestChecklistStatus }>) {
+  if (request.ticket && request.ticket.id === selectedTicketId) return <ClientRequestRail {...rail} ticket={request.ticket} checklist={checklist} projectPanel />;
+  if (!selectedTicketId) return <p className="cx-request-note cx-reqrail-hint">Pick a request to see its status, files and details.</p>;
   if (request.error) return <p role="alert" className="cx-error">{request.error}</p>;
   return <section className="cx-project-ticket-detail" aria-busy="true"><LoadingRows label="Loading request" layout="detail" rows={3} /></section>;
 }

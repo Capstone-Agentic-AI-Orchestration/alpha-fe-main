@@ -30,24 +30,33 @@ describe('client project page', () => {
     expect(rail).toBeGreaterThan(chat);
     expect(html).toContain('All projects');
     expect(html.slice(rail)).toContain('class="cx-project-ticket-list" aria-label="Requests"');
-    expect(html).toContain('Pick a request to see its progress');
+    expect(html).toContain('Pick a request to see its status');
     // The project header owns the New request action when it is provided.
     expect(html).not.toContain('New request');
     expect(html).toContain('Project conversation');
     expect(html).not.toContain('Open details');
   });
 
-  it('shows progress above the picked request and keeps files and request details folded', () => {
+  it('shows checklist status for a new request and keeps files and request details folded', () => {
     const html = page({ selectedTicketId: 't-1', request: { ticket, loading: false, error: '' } });
     const side = html.slice(html.indexOf('aria-label="Requests and details for Resort Website"'));
-    const progress = side.indexOf('class="cx-project-request-progress" aria-label="Request progress"');
-    expect(progress).toBeGreaterThan(-1);
-    expect(side.indexOf('id="client-request-title"')).toBeGreaterThan(progress);
-    expect(side).toContain('What happens next</h3>');
+    expect(side).toContain('>Open</span>');
+    expect(side).not.toContain('aria-label="Request progress"');
+    expect(side).not.toContain('What happens next');
     expect(side).toContain('class="cx-reqcard-title">Files');
     expect(side).toContain('class="cx-reqcard-title">Request details');
     expect(side).toContain('hidden="" class="cx-reqcard-body cx-request-files"');
     expect(side).toContain('hidden="" class="cx-reqcard-body "><p class="cx-request-copy cx-project-request-description">example 2');
+  });
+
+  it('keeps the progress strip and approval action for a project request with an existing plan', () => {
+    const existing: ClientTicketDetail = { ...ticket, status: 'awaiting_client', requestedAction: 'agree_scope',
+      scope: { id: 'scope-1', summary: 'Agreed deliverables', proposedAt: ticket.updatedAt, agreed: false } };
+    const html = page({ selectedTicketId: 't-1', request: { ticket: existing, loading: false, error: '' } });
+    const progress = html.indexOf('class="cx-project-request-progress" aria-label="Request progress"');
+    expect(progress).toBeGreaterThan(-1);
+    expect(html.indexOf('id="client-request-title"')).toBeGreaterThan(progress);
+    expect(html).toContain('Approve plan');
   });
 
   it('waits for the picked request inside the panel instead of reloading the page', () => {
