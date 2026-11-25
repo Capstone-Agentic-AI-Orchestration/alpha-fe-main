@@ -227,7 +227,7 @@ export function nextStepFor(input: NextStepInput): NextStep {
   }
 
   const handoff = input.canHandOffToChat ? { label: 'Work on this in chat', action: 'handoff_chat' as const } : undefined;
-  const plan = input.canStartBuild ? { label: 'Plan build', action: 'plan_build' as const } : undefined;
+  const plan = input.canStartBuild ? { label: 'Build with Alpha', action: 'plan_build' as const } : undefined;
 
   switch (input.status) {
     case 'done':

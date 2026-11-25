@@ -51,7 +51,7 @@ describe('task hand-off', () => {
 
 describe('nextStepFor', () => {
   it('offers a build plan to a role without chat', () => {
-    expect(nextStepFor(base).primary).toEqual({ label: 'Plan build', action: 'plan_build' });
+    expect(nextStepFor(base).primary).toEqual({ label: 'Build with Alpha', action: 'plan_build' });
   });
 
   it('offers the chat hand-off first to a role with chat', () => {

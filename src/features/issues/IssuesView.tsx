@@ -16,6 +16,7 @@ import { useBoardAgentChanges } from '@/features/board-agent/useBoardAgentChange
 import { cardMarks, ghostCards } from '@/features/board-agent/agentChanges';
 import { isEpic } from '@/features/board-build/epic';
 import { BoardAlphaPanel } from '@/features/board-build/BoardAlphaPanel';
+import { BuildWithAlphaDialog } from '@/features/board-build/BuildWithAlphaDialog';
 import { TaskDetailDrawer } from './TaskDetailDrawer';
 import { CalendarView } from './CalendarView';
 import { initialsOf, taskHandoffMessage, taskStage } from './taskFlow';
@@ -98,6 +99,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
     restoreIssue,
     projects,
     startIssueBuild,
+    runAgentOnIssue,
     identity,
     localMode,
     createIssue,
@@ -171,9 +173,9 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
   const [dragOverColumn, setDragOverColumn] = useState<IssueStatus | null>(null);
   const [pendingDoneIssueId, setPendingDoneIssueId] = useState<string | null>(null);
   const [pendingBuildIssueId, setPendingBuildIssueId] = useState<string | null>(null);
-  const [buildInstructions, setBuildInstructions] = useState('');
   const [buildSubmitting, setBuildSubmitting] = useState(false);
-  useEffect(() => { setBuildInstructions(''); }, [pendingBuildIssueId]);
+  /** The task whose spec Build with Alpha asked to draft; its drawer starts the draft once. */
+  const [specDraftIssueId, setSpecDraftIssueId] = useState<string | null>(null);
 
   /**
    * The latest Orchestrator build for each issue. Builds do not change an
@@ -475,11 +477,11 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
   };
 
   const pendingBuildIssue = pendingBuildIssueId ? issues.find(issue => issue.id === pendingBuildIssueId) : undefined;
-  const confirmIssueBuild = async () => {
+  const confirmIssueBuild = async (instructions: string) => {
     if (!pendingBuildIssue || buildSubmitting) return;
     setBuildSubmitting(true);
     try {
-      if (await startIssueBuild(pendingBuildIssue.id, buildInstructions)) setPendingBuildIssueId(null);
+      if (await startIssueBuild(pendingBuildIssue.id, instructions)) setPendingBuildIssueId(null);
       refreshIssueBuilds();
     } finally { setBuildSubmitting(false); }
   };
@@ -1204,6 +1206,8 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
             onHandOff={canHandOff ? handOffToChat : undefined}
             onBuildChanged={refreshIssueBuilds}
             onOpenTask={(id, projectId) => { setSelectedProject(projectId); setSelectedIssueId(id); }}
+            draftSpec={specDraftIssueId === selectedIssue.id}
+            onSpecDraftStarted={() => setSpecDraftIssueId(null)}
             agentChanges={agentBoard.changes.filter(change => change.issueId === selectedIssue.id)}
             agentDecidingId={agentBoard.busyId}
             onAgentDecide={(id, action) => void agentBoard.decide(id, action)}
@@ -1212,36 +1216,22 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
       </div>
 
       {pendingBuildIssue && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
-          <button type="button" aria-label="Close plan request" disabled={buildSubmitting} className="absolute inset-0 bg-overlay/70 backdrop-blur-sm" onClick={() => setPendingBuildIssueId(null)} />
-          <div role="dialog" aria-modal="true" aria-labelledby="confirm-build-title" className="relative w-full max-w-md rounded-2xl border border-divider bg-surface-raised p-6 shadow-2xl">
-            <div className="flex items-start gap-3">
-              <div className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-selected text-selected-content">
-                <Sparkles className="h-5 w-5" />
-              </div>
-              <div className="space-y-1.5">
-                <h2 id="confirm-build-title" className="text-base font-semibold text-content">
-                  Plan build for {pendingBuildIssue.identifier}
-                </h2>
-                <p className="text-sm leading-relaxed text-content-secondary">
-                  Alpha plans this task against its acceptance checklist. Review and approve the plan in the Build tab before code changes begin.
-                </p>
-              </div>
-            </div>
-            <label htmlFor="build-instructions" className="mt-4 block text-sm font-medium text-content-secondary">Developer instructions <span className="font-normal text-content-muted">(optional)</span></label>
-            <textarea id="build-instructions" rows={3} maxLength={1500} value={buildInstructions} onChange={event => setBuildInstructions(event.target.value)}
-              placeholder="Add technical context, implementation guidance, or constraints for this task."
-              className="mt-2 w-full resize-y rounded-md border border-control bg-well px-3 py-2 text-sm text-content placeholder-content-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-focus" />
-            <div className="mt-6 flex justify-end gap-2">
-              <button type="button" disabled={buildSubmitting} onClick={() => setPendingBuildIssueId(null)} className="rounded-lg border border-divider px-3.5 py-2 text-sm font-medium text-content-secondary transition-colors hover:bg-surface-high hover:text-content">
-                Cancel
-              </button>
-              <button type="button" disabled={buildSubmitting} onClick={() => void confirmIssueBuild()} className="rounded-lg bg-action px-3.5 py-2 text-sm font-semibold text-on-action transition-colors hover:bg-action-hover">
-                {buildSubmitting ? 'Requesting plan…' : 'Plan build'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <BuildWithAlphaDialog
+          key={pendingBuildIssue.id}
+          issue={pendingBuildIssue}
+          submitting={buildSubmitting}
+          onPlan={instructions => void confirmIssueBuild(instructions)}
+          onSpecFirst={() => {
+            setPendingBuildIssueId(null);
+            setSelectedIssueId(pendingBuildIssue.id);
+            setSpecDraftIssueId(pendingBuildIssue.id);
+          }}
+          onPickAgent={agentId => {
+            setPendingBuildIssueId(null);
+            runAgentOnIssue(pendingBuildIssue.id, agentId);
+          }}
+          onClose={() => setPendingBuildIssueId(null)}
+        />
       )}
 
       {pendingDoneIssue && (
