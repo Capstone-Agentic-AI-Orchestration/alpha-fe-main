@@ -6,7 +6,6 @@ import { previewStage, previewStageEvents, previewStageSummary } from './stagePr
 import {
   pmTicketApi,
   type PmContractDraft,
-  type PmPocDraft,
   type PmRoundLabel,
   type PmTicketDetail,
   type PmTicketMessage,
@@ -223,8 +222,7 @@ const localMethods: Partial<typeof pmTicketApi> = {
   async setStartingStage(_projectId: string, _clientId: string, input: { stage: 'poc' | 'development' | 'completed'; revisionsUsed?: number; revisionLimit?: number }) {
     return previewStage.setStartingStage(input);
   },
-  async savePocDraft(_projectId: string, clientId: string, draft: PmPocDraft) { return previewStage.savePocDraft(draft, clientId); },
-  async publishPoc(_projectId: string, _clientId: string, pocId: string) { return previewStage.publishPoc(pocId); },
+  async completePoc() { return previewStage.completePoc(); },
   async saveContractDraft(_projectId: string, clientId: string, input: PmContractDraft) { return previewStage.saveContractDraft(input, clientId); },
   async issueContract(_projectId: string, _clientId: string, contractId: string) { return previewStage.issueContract(contractId); },
   async voidContract(_projectId: string, _clientId: string, contractId: string) { return previewStage.voidContract(contractId); },

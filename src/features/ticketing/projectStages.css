@@ -21,11 +21,6 @@
 .ps-lead { margin: 0; color: rgb(var(--ui-text-primary)); font-size: 13px; line-height: 1.55; }
 .ps-note { margin: 0; color: rgb(var(--ui-text-muted)); font-size: 12.5px; line-height: 1.55; }
 .ps-copy { margin: 0; color: rgb(var(--ui-text-secondary)); font-size: 12.5px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
-.ps-scope { display: flex; flex-direction: column; gap: 6px; }
-.ps-scope h3 { margin: 0; color: rgb(var(--ui-text-primary)); font-size: 14px; font-weight: 600; }
-.ps-scope h4 { margin: 8px 0 0; color: rgb(var(--ui-text-muted)); font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
-.ps-scope.is-compact h3 { font-size: 13px; }
-.ps-scope-title { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 10px; }
 .ps-tag { color: rgb(var(--ui-text-muted)); font-size: 11.5px; font-variant-numeric: tabular-nums; }
 .ps-list { display: flex; flex-direction: column; gap: 4px; margin: 0; padding-left: 18px; list-style: disc; color: rgb(var(--ui-text-secondary)); font-size: 12.5px; line-height: 1.5; }
 .ps-list strong { color: rgb(var(--ui-text-primary)); font-weight: 600; }

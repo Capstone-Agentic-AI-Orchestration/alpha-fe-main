@@ -1,6 +1,6 @@
 import { ApiRequestError, apiService } from '@/shared/services/apiService';
 import { parseConversation, parseConversationRequest, parseConversationRequests } from './projectConversation';
-import { parseStageResult, parseStageSummary, type ContractClause, type PocFeature, type RevisionClassification, type StageResult, type StageSummary } from './projectStages';
+import { parseStageResult, parseStageSummary, type ContractClause, type RevisionClassification, type StageResult, type StageSummary } from './projectStages';
 import { parseClientDeliveryFile, parseClientDeliveryManifest, readPmDeliveryFile, type ClientDeliveryFile } from './clientDelivery';
 import { parsePmDeliveryCandidates } from './pmDeliveryCandidates';
 import { parseTicketDocumentList, type TicketDocumentsReadApi } from './ticketDocuments';
@@ -309,10 +309,8 @@ export interface PmCentralIntakeClarify { intakeId: string; operationId: string;
 export type PmTicketInvitationEmailReceipt = PmTicketInvitationReceipt;
 
 function encodeId(value: string): string { return encodeURIComponent(value); }
-/** What the PM writes for a proof of concept version. */
-export interface PmPocDraft { title: string; summary: string; features: PocFeature[]; screens: string[]; outOfScope: string; note: string }
-/** What the PM may change in a contract draft; the scope and revision limit come from the approved POC. */
-export interface PmContractDraft { deliverables?: string[]; clauses?: ContractClause[]; notes?: string }
+/** What the PM may change in a contract draft; the revision limit comes from the stage. */
+export interface PmContractDraft { scope?: { title: string; summary: string }; deliverables?: string[]; clauses?: ContractClause[]; notes?: string }
 /** How the PM labels one note of a feedback round. */
 export interface PmRoundLabel { id: string; classification: RevisionClassification; pmNote: string }
 /** What an accepted inquiry became, when the server says: its request and that request's project. */
@@ -696,14 +694,11 @@ export const pmTicketApi = {
   setStartingStage(projectId: string, clientId: string, input: { operationId: string; stage: 'poc' | 'development' | 'completed'; revisionsUsed?: number; revisionLimit?: number }) {
     return pmTicketApi.stageCommand(projectId, clientId, 'starting-stage', input);
   },
-  async savePocDraft(projectId: string, clientId: string, draft: PmPocDraft): Promise<StageSummary> {
-    return parseStageSummary(await apiService.ticketRequest<unknown>(
-      `/tickets/projects/${encodeId(projectId)}/stage/poc/draft${query({ clientId })}`, { method: 'PUT', body: JSON.stringify(draft) }));
+  /** The client is happy with the concept: move the project from the POC stage to the contract. */
+  completePoc(projectId: string, clientId: string, operationId: string) {
+    return pmTicketApi.stageCommand(projectId, clientId, 'poc/complete', { operationId });
   },
-  publishPoc(projectId: string, clientId: string, pocId: string, operationId: string) {
-    return pmTicketApi.stageCommand(projectId, clientId, `poc/${encodeId(pocId)}/publish`, { operationId });
-  },
-  /** Creates the contract draft from the approved POC (empty input), or edits its deliverables, clauses and notes. */
+  /** Creates the contract draft (empty input), or edits its scope, deliverables, clauses and notes. */
   async saveContractDraft(projectId: string, clientId: string, input: PmContractDraft): Promise<StageSummary> {
     return parseStageSummary(await apiService.ticketRequest<unknown>(
       `/tickets/projects/${encodeId(projectId)}/stage/contract/draft${query({ clientId })}`, { method: 'PUT', body: JSON.stringify(input) }));

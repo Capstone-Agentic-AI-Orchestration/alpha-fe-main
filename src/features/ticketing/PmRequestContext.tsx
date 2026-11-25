@@ -158,7 +158,9 @@ function Notes({ api, detail, onSaved }: Readonly<{ api: typeof pmTicketApi; det
 }
 
 /**
- * The selected ticket's next step and accordion sections in the project conversation.
+ * The selected ticket in the project conversation: its next step and the step's
+ * buttons (Send plan, Start work, …) in view, then its details, notes and documents.
+ * Its work is tracked as tasks on the board, so linked tasks are not listed here.
  */
 export function PmSelectedTicket({ api = pmTicketApi, documentsApi, request, clientName, detail, error, refreshToken = '', onChanged, actions, workflow }: Readonly<{
   api?: typeof pmTicketApi;
@@ -183,22 +185,12 @@ export function PmSelectedTicket({ api = pmTicketApi, documentsApi, request, cli
         <span>{nextStepText(detail)}</span>
       </p>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 empty:hidden">{actions}</div>
+      {workflow && <section aria-label="Ticket steps">{workflow}</section>}
       <div>
         <PmCollapsibleRailCard nested id="selected-ticket-details" icon={<Info size={16} />} title="Request details">
           <p className="mb-4 whitespace-pre-wrap text-[13px] leading-relaxed text-content">{detail.description}</p>
           <Details detail={detail} clientName={clientName} />
         </PmCollapsibleRailCard>
-        {(workflow || request.linkedTasks.length > 0) && <PmCollapsibleRailCard nested id="selected-ticket-work"
-          icon={<CircleDot size={16} />} title="Ticket actions and linked tasks" initiallyOpen={false}>
-          {request.linkedTasks.length > 0 && <ul aria-label="Linked tasks" className="mb-3 space-y-2">
-            {request.linkedTasks.map(task => <li key={task.issueId} className="flex flex-wrap items-baseline gap-x-2 text-xs text-content-secondary">
-              <code>{task.identifier}</code>
-              <span className="min-w-0 flex-1">{task.title}</span>
-              <span className="shrink-0 text-content-muted">{task.status === 'done' ? 'Done' : task.status.replace('_', ' ')}</span>
-            </li>)}
-          </ul>}
-          {workflow}
-        </PmCollapsibleRailCard>}
         <PmCollapsibleRailCard nested id="selected-ticket-notes" icon={<StickyNote size={16} />} title="Private notes" initiallyOpen={false}>
           <Notes api={api} detail={detail} onSaved={() => onChanged?.()} />
         </PmCollapsibleRailCard>

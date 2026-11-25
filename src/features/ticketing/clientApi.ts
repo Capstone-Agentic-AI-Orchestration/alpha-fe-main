@@ -434,12 +434,6 @@ export const clientTicketApi = {
       () => clientTicketApi.getStageOperation(workspaceId, projectId, body.operationId),
     );
   },
-  requestPocChanges(workspaceId: string, projectId: string, pocId: string, input: { operationId: string; body: string }) {
-    return clientTicketApi.stageCommand(workspaceId, projectId, `poc/${pathId(pocId)}/changes`, input);
-  },
-  approvePoc(workspaceId: string, projectId: string, pocId: string, input: { operationId: string; contentHash: string; fullName: string }) {
-    return clientTicketApi.stageCommand(workspaceId, projectId, `poc/${pathId(pocId)}/approve`, { ...input, consent: true });
-  },
   signContract(workspaceId: string, projectId: string, contractId: string, input: { operationId: string; contentHash: string; fullName: string }) {
     return clientTicketApi.stageCommand(workspaceId, projectId, `contract/${pathId(contractId)}/sign`, { ...input, consent: true });
   },

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Printer } from 'lucide-react';
-import { stageDay } from './PocScopeView';
+import { stageDay } from './stageDates';
 import type { Contract } from './projectStages';
 import './projectStages.css';
 
@@ -39,9 +39,10 @@ export function ContractView({ contract, printable = true }: Readonly<{ contract
       {printable && <button type="button" className="ps-link ps-no-print" onClick={print}><Printer size={13} aria-hidden="true" /> Print or save as PDF</button>}
     </header>
     <section>
-      <h4>Scope (approved POC v{terms.scope.pocNumber})</h4>
-      <p className="ps-copy"><strong>{terms.scope.title}.</strong> {terms.scope.summary}</p>
-      {terms.scope.screens.length > 0 && <p className="ps-copy">Screens and pages: {terms.scope.screens.join(', ')}</p>}
+      {/* Contracts issued before the POC became a stage marker name the POC version they were drafted from. */}
+      <h4>{terms.scope.pocNumber ? `Scope (approved POC v${terms.scope.pocNumber})` : 'Scope'}</h4>
+      <p className="ps-copy"><strong>{terms.scope.title}.</strong>{terms.scope.summary && <> {terms.scope.summary}</>}</p>
+      {terms.scope.screens && terms.scope.screens.length > 0 && <p className="ps-copy">Screens and pages: {terms.scope.screens.join(', ')}</p>}
       {terms.scope.outOfScope && <p className="ps-copy">Not included: {terms.scope.outOfScope}</p>}
     </section>
     {terms.deliverables.length > 0 && <section>

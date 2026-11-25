@@ -3,7 +3,7 @@ import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { Textarea } from '@/shared/components/ui/textarea';
 import { CLASSIFICATION_LABEL, RoundHistory } from './ClientDevelopmentStage';
-import { stageDay } from './PocScopeView';
+import { stageDay } from './stageDates';
 import type { PmStagePanelProps } from './PmStagePanel';
 import { extraRounds, revisionAllowance, type RevisionClassification, type RevisionRound } from './projectStages';
 

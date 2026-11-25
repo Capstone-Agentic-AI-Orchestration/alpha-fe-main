@@ -7,7 +7,7 @@ import type { ClientProject } from './clientApi';
 
 const base = parseStageSummary({
   stage: 'completed', stageLabel: 'Completed', revisionLimit: 3, revisionsUsed: 3, version: 1, stageChangedAt: '2026-11-21T10:00:00Z',
-  nextAction: null, poc: null, pocDraft: null, pocHistory: [], contract: null, rounds: [], requests: [],
+  nextAction: null, contract: null, rounds: [], requests: [],
   final: { deliveredAt: '2026-11-20T10:00:00Z', note: '', acceptedAt: '2026-11-21T10:00:00Z', acceptedName: 'Juan' },
 });
 const summary = (patch: Partial<StageSummary>): StageSummary => ({ ...base, ...patch });

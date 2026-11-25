@@ -11,7 +11,7 @@ import { pmTicketsIntakeEnabled, usePmWorkflowActions } from './pmTicketAvailabi
 import { ClientConversations, ClientDocuments, ClientOverview, ClientProjects, ClientProposals, loadClientProjects, loadClientRequests, type ClientProjectDetail } from './PmClientSections';
 import type { TicketDocumentsReadApi } from './ticketDocuments';
 import { OPEN_INQUIRY_KEY, type OpenInquiry } from './PmInquiriesPage';
-import { PmClientConversationTab, PmRequestConversation, clientIdFromKey, type ConversationLinkableTask, type ConversationTaskDraft, type PmConversationFocus } from './PmClientConversation';
+import { PmClientConversationTab, PmRequestConversation, clientIdFromKey, type ConversationTaskDraft, type PmConversationFocus } from './PmClientConversation';
 import { LINKED_REQUEST_KEY, type LinkedRequestDraft } from './requestTaskLink';
 import { CLIENTS_CONVERSATION_FOCUS_KEY } from './TaskClientRequest';
 
@@ -85,7 +85,7 @@ export function clientsSummary(clients: readonly PmClientSummary[]): string {
  * view locked to this client), the projects it can see, and its portal access.
  */
 export function PmClientsPage() {
-  const { activeWorkspace, projects, setActiveTab, issues, activeTabId, setTabSessionState } = useApp();
+  const { activeWorkspace, projects, setActiveTab, activeTabId, setTabSessionState } = useApp();
   // Tab session state, so "View client" on a ticket can open a client here.
   const [selectedKey, setSelectedKey] = useTabSessionState<string | null>('clients.selected', null);
   const [section, setSection] = useTabSessionState<ClientSection>('clients.section', 'overview');
@@ -109,9 +109,7 @@ export function PmClientsPage() {
       setTabSessionState(activeTabId, 'issueModal.description', draft.description);
       setTabSessionState(activeTabId, LINKED_REQUEST_KEY, linked);
       setTabSessionState(activeTabId, 'issueModal.open', true);
-    }}
-    tasksForProject={projectId => issues.filter(issue => issue.projectId === projectId && !issue.archivedAt)
-      .map(issue => ({ id: issue.id, identifier: issue.identifier, title: issue.title }))} />;
+    }} />;
 }
 
 /**
@@ -121,7 +119,7 @@ export function PmClientsPage() {
  */
 export function PmClientsWorkspace({ api = pmTicketApi, documentsApi = pmTicketDocumentsApi, workspaceKey, intakeEnabled = true,
   workflowActions = 'all', selectedKey, onSelectKey, section, onSection, knownProjectIds, onOpenProject, onOpenInquiries, refreshToken,
-  refreshTabId, conversationFocus: externalFocus = null, onConversationFocusHandled, onCreateTask, tasksForProject }: {
+  refreshTabId, conversationFocus: externalFocus = null, onConversationFocusHandled, onCreateTask }: {
   api?: typeof pmTicketApi;
   documentsApi?: TicketDocumentsReadApi;
   workspaceKey: string;
@@ -143,7 +141,6 @@ export function PmClientsWorkspace({ api = pmTicketApi, documentsApi = pmTicketD
   onConversationFocusHandled?: () => void;
   /** Opens the New task dialog from the conversation; absent in the UI preview. */
   onCreateTask?: (draft: ConversationTaskDraft) => void;
-  tasksForProject?: (projectId: string) => ConversationLinkableTask[];
 }) {
   const [clients, setClients] = useState<PmClientSummary[] | null>(null);
   const [error, setError] = useState('');
@@ -256,8 +253,7 @@ export function PmClientsWorkspace({ api = pmTicketApi, documentsApi = pmTicketD
       </div>
     </div> : <p className="p-6 text-xs text-content-muted">Choose a request from the client overview.</p>}
     renderConversation={client => <PmClientConversationTab api={api} documentsApi={documentsApi} client={client} focus={conversationFocus}
-      onBackToProjects={() => onSection('projects')} workflowActions={workflowActions} onCreateTask={onCreateTask}
-      tasksForProject={tasksForProject} refreshToken={refreshToken} />}
+      onBackToProjects={() => onSection('projects')} workflowActions={workflowActions} onCreateTask={onCreateTask} refreshToken={refreshToken} />}
     renderOverview={client => <ClientOverview client={client} requests={requests} conversations={conversations} onOpenRequest={openRequest} />}
     renderConversations={client => <ClientConversations client={client} requests={requests} conversations={conversations}
       error={conversationsError} onOpenRequest={openRequest} />}

@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { ChevronRight, FolderKanban, Link2, Plus } from 'lucide-react';
+import { ChevronRight, FolderKanban, Plus } from 'lucide-react';
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
-import { Select } from '@/shared/components/ui/select';
 import { ApiRequestError } from '@/shared/services/apiService';
 import { pmTicketApi, pmTicketDocumentsApi, type PmClientProjectConversation, type PmClientSummary } from './pmApi';
 import { ProjectConversationChat, ProjectConversationView, useConversationJump, type ConversationAbout } from './ProjectConversationView';
@@ -11,7 +10,7 @@ import { PmSelectedTicket, PmTicketProgress, usePmRequestDetail } from './PmRequ
 import { PmConversationRail } from './PmConversationRail';
 import type { TicketDocumentsReadApi } from './ticketDocuments';
 import { canToggleRequest, withUpdatedRequest, type ConversationItem, type ConversationRequest } from './projectConversation';
-import { REQUEST_TASK_LINKED_EVENT, linkSavedTaskToRequest } from './requestTaskLink';
+import { REQUEST_TASK_LINKED_EVENT } from './requestTaskLink';
 import { useProjectStage } from './useProjectStage';
 import { ProjectStageTracker } from './ProjectStageTracker';
 import { PmStagePanel } from './PmStagePanel';
@@ -20,8 +19,6 @@ import type { StageSummary } from './projectStages';
 const REFRESH_MS = 30_000;
 const newOperationId = () => crypto.randomUUID();
 const errorText = (error: unknown, fallback: string) => error instanceof Error && error.message ? error.message : fallback;
-/** Focuses the task picker when "Link task" opens it; a stable ref so it runs once, not on every render. */
-const focusWhenShown = (element: HTMLSelectElement | null) => { element?.focus(); };
 
 /** The client account behind a client page's key (`client:<account>`), or null for an unverified inquiry group. */
 export function clientIdFromKey(key: string): string | null {
@@ -34,8 +31,6 @@ export interface PmConversationFocus { projectId?: string | null; ticketId?: str
 export interface ConversationTaskDraft {
   projectId: string; title: string; description: string; request: { ticketId: string; title: string } | null;
 }
-/** A board task that can be linked to a request. */
-export interface ConversationLinkableTask { id: string; identifier: string; title: string }
 
 /** How a PM reply about a request is sent: an ordinary reply, or a question the client must answer. */
 export type PmReplyKind = 'reply' | 'request_details';
@@ -137,10 +132,11 @@ function useAboutTarget(selected: ConversationAbout | null) {
 /**
  * A client's Conversation tab: one conversation per project the client can see.
  * The side panel expands the selected ticket beside the same project conversation,
- * including task links, workflow actions, request details, private notes and documents.
+ * with its next step and that step's buttons, request details, private notes and documents. Tasks are
+ * attached to a request by creating them from it (Create task).
  */
 export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTicketDocumentsApi, client, focus = null, workflowActions,
-  onBackToProjects, onCreateTask, tasksForProject, refreshToken }: Readonly<{
+  onBackToProjects, onCreateTask, refreshToken }: Readonly<{
   api?: typeof pmTicketApi;
   documentsApi?: TicketDocumentsReadApi;
   client: PmClientSummary;
@@ -149,8 +145,6 @@ export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTi
   onBackToProjects?: () => void;
   /** Opens the New task dialog; absent where tasks cannot be made, as in the UI preview. */
   onCreateTask?: (draft: ConversationTaskDraft) => void;
-  /** The project's board tasks, for linking one to a request. */
-  tasksForProject?: (projectId: string) => ConversationLinkableTask[];
   refreshToken?: number;
 }>) {
   const clientId = clientIdFromKey(client.key);
@@ -160,7 +154,6 @@ export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTi
   const [actionError, setActionError] = useState('');
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
-  const [linking, setLinking] = useState<string | null>(null);
   const [contextTicketId, setContextTicketId] = useState<string | null>(focus?.ticketId ?? null);
   const [contextVersion, setContextVersion] = useState(0);
   const [replyKind, setReplyKind] = useState<PmReplyKind>('reply');
@@ -192,7 +185,6 @@ export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTi
   }, [api, clientId, refreshToken]);
 
   const project = projects?.find(item => item.projectId === projectId) ?? null;
-  const projectTasks = projectId && tasksForProject ? tasksForProject(projectId) : [];
 
   // The selected request receives replies by default.
   const contextRequest = requests?.find(request => request.ticketId === contextTicketId)
@@ -222,16 +214,9 @@ export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTi
     await load(true);
   }, 'The request was not updated.');
 
-  const linkExisting = (request: ConversationRequest, issueId: string) => {
-    setLinking(null);
-    void run(async () => { await linkSavedTaskToRequest(request.ticketId, issueId, 'conversation', api, []); await load(true); }, 'The task was not linked.');
-  };
-
   const notice = conversationNotice(clientId, projectsError, projects);
   if (notice) return notice;
 
-  const linkedIds = new Set((requests ?? []).flatMap(request => request.linkedTasks.map(task => task.issueId)));
-  const linkable = projectTasks.filter(task => !linkedIds.has(task.id));
   // Keep stage and preview context below the ticket accordion.
   const stageCard = stageSummary && projectId && clientId ? { ...stageCardText(stageSummary),
     content: <PmStagePanel api={api} projectId={projectId} clientId={clientId} summary={stageSummary} busy={stage.busy}
@@ -241,27 +226,11 @@ export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTi
   const refreshTicket = () => { setContextVersion(value => value + 1); void load(true); };
 
   const renderRequestActions = (request: ConversationRequest) => {
-    if (request.checklist === 'declined' || request.checklist === 'cancelled') return null;
-    let link: ReactNode = null;
-    if (tasksForProject && linking === request.ticketId) link = <label className="flex items-center gap-1.5">
-      <span className="sr-only">Task to link to {request.title}</span>
-      <Select ref={focusWhenShown} defaultValue="" onChange={event => { if (event.target.value) linkExisting(request, event.target.value); }}
-        onBlur={() => setLinking(null)} className="h-8 max-w-[12rem] px-2 text-xs">
-        <option value="" disabled>{linkable.length ? 'Choose a task…' : 'No other tasks on this project'}</option>
-        {linkable.map(task => <option key={task.id} value={task.id}>{task.identifier} · {task.title}</option>)}
-      </Select>
-    </label>;
-    else if (tasksForProject) link = <Button type="button" variant="ghost" size="sm" onClick={() => setLinking(request.ticketId)} disabled={busy}
+    if (request.checklist === 'declined' || request.checklist === 'cancelled' || !onCreateTask) return null;
+    return <Button type="button" variant="ghost" size="sm" onClick={() => createTask(request, request.description)} disabled={busy}
       className="h-auto justify-start px-0 py-0 text-[12px] font-semibold text-link hover:bg-transparent hover:text-link-hover">
-      <Link2 size={13} aria-hidden="true" /> Link task
+      <Plus size={13} aria-hidden="true" /> Create task
     </Button>;
-    return <>
-      {onCreateTask && <Button type="button" variant="ghost" size="sm" onClick={() => createTask(request, request.description)} disabled={busy}
-        className="h-auto justify-start px-0 py-0 text-[12px] font-semibold text-link hover:bg-transparent hover:text-link-hover">
-        <Plus size={13} aria-hidden="true" /> Create task
-      </Button>}
-      {link}
-    </>;
   };
 
   const conversationHeader = <>
