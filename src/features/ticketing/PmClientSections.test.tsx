@@ -89,11 +89,14 @@ describe('Client projects', () => {
   it('shows the preview link, feedback, and links only to known projects', async () => {
     const details = await loadClientProjects(api as never, withProjects);
     const html = renderToStaticMarkup(<ClientProjects client={withProjects} projects={details} knownProjectIds={new Set(['p1'])} onOpenProject={() => undefined} />);
-    expect(html).toContain('href="https://preview.example.test"');
-    expect(html).toContain('Ana Cruz');
-    expect(html).toContain('Newer');
-    expect(html).toContain('Project feedback could not be loaded.');
-    expect(html.match(/Open conversation/g)).toHaveLength(1);
+    const [firstCard, secondCard] = html.split('</section>');
+    expect(firstCard).toContain('href="https://preview.example.test"');
+    expect(firstCard).toContain('Ana Cruz');
+    expect(firstCard).toContain('Newer');
+    expect(firstCard).toContain('Open conversation');
+    expect(secondCard).toContain('Project feedback could not be loaded.');
+    expect(secondCard).not.toContain('Open preview');
+    expect(secondCard).not.toContain('Open conversation');
   });
 
   it('never links a preview address that is not a web page', () => {
