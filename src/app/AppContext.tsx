@@ -48,7 +48,7 @@ import {
 import { apiService, normalizeGitHubRepo, normalizeSkill, onWorkspaceRefused, parseApiError, setActiveWorkspaceId } from '@/shared/services/apiService';
 import { chatSendFailureText } from '@/features/chat/chatSendFailure';
 import { applyChatReplies, mergeLoadedTranscript, mergeThreadsWithCachedMessages } from './chatThreadHydration';
-import { createBoardSyncCoordinator } from './boardSyncCoordinator';
+import { boardSyncFailureMessage, createBoardSyncCoordinator } from './boardSyncCoordinator';
 import { runnerSocket } from '@/shared/services/runnerSocket';
 import { fetchServerSnapshot, persist, describeWriteError, ServerStatus } from '@/shared/services/serverSync';
 import { loadFromStorage, saveToStorage } from '@/shared/lib/storage';
@@ -773,6 +773,8 @@ ${e.detail}`;
     if (localMode || !activeWorkspaceId || workspaceLoading || workspaceSwitching || identityStatus !== 'ready') return;
 
     let cancelled = false;
+    /** Once per failure, not on every retry; a recovered board can warn again later. */
+    const failurePrefix = `board:${activeWorkspaceId}:`;
     const coordinator = createBoardSyncCoordinator(async () => {
       const result = await catchUpWorkspaceBoard(activeWorkspaceId);
       if (cancelled) return;
@@ -780,6 +782,17 @@ ${e.detail}`;
       setAgents(result.state.agents);
       setIssues(result.state.issues);
       setServerStatus('online');
+      for (const seen of reportedSyncErrorsRef.current) {
+        if (seen.startsWith(failurePrefix)) reportedSyncErrorsRef.current.delete(seen);
+      }
+    }, undefined, error => {
+      if (cancelled) return;
+      const message = boardSyncFailureMessage(error);
+      if (!message) return;
+      const seen = failurePrefix + message;
+      if (reportedSyncErrorsRef.current.has(seen)) return;
+      reportedSyncErrorsRef.current.add(seen);
+      showToast('Couldn’t load the team board', message, 'error');
     });
     const onVisibilityChange = () => coordinator.onVisible();
     document.addEventListener('visibilitychange', onVisibilityChange);
