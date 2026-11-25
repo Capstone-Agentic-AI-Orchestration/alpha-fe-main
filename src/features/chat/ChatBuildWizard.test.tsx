@@ -120,14 +120,11 @@ describe('the build panel above the message box', () => {
     expect(render({ build: build('awaiting_plan_approval'), onStartPlan: noop, canStop: false })).not.toContain('>Stop plan<');
   });
 
-  it('folds a running build to its header, and keeps its stop button there', () => {
-    const html = render({ build: build('executing') });
-    expect(html).toContain('Build in progress');
-    expect(html).toContain('aria-expanded="false"');
-    expect(html).toContain('Stop the build</button>');
-    expect(html).not.toContain('Agents stop at the next safe point.</');
-    expect(render({ build: build('executing'), stopArmed: true })).toContain('Click again to stop</button>');
-    expect(render({ build: build('executing'), canStop: false })).not.toContain('Stop the build');
+  // A working build is the status line over the message box and steps in the conversation.
+  it('stays out of the way while a build works, unless there is a problem to show', () => {
+    for (const status of ['planning', 'executing', 'validating', 'cancelling'] as const) expect(render({ build: build(status) })).toBe('');
+    expect(render({ build: build('executing'), error: 'The build could not be stopped.' })).toContain('The build could not be stopped.');
+    expect(render({ build: build('executing'), refusal: { message: 'Another build holds this codebase.', actions: [] } })).toContain('Another build holds this codebase.');
   });
 
   it('offers Start plan and Ask for changes on a plan waiting for approval', () => {
@@ -191,18 +188,13 @@ describe('the build panel above the message box', () => {
     expect(html).toContain('>Ask for changes<');
   });
 
-  it('shows a working build as a one-line header, and labels every repository it touches', () => {
+  it('labels every repository a working build touches', () => {
     const running = build('executing');
     running.orchestration.run.currentTaskId = 't2';
     running.orchestration.tasks.push({ ...running.orchestration.tasks[0], id: 't2', title: 'Add the login API', repository: 'acme/shop-be', ownerName: 'Backend Agent', status: 'running' });
     running.agents = [{ name: 'Backend Agent', state: 'running', currentTaskTitle: 'Add the login API' }] as unknown as ProjectLiveBuild['agents'];
     expect(buildRepositoriesLabel(running)).toBe('shop-fe, shop-be');
-    const html = render({ build: running });
-    expect(html).toContain('Build in progress');
-    expect(html).not.toContain('aria-label="Build steps"');
-    // The "who is working on what" line lives in the side panel now, not above the message box.
-    expect(html).not.toContain('Add the login API · shop-be');
-    expect(html).not.toMatch(/>Backend Agent is working</);
+    expect(render({ build: running })).toBe('');
   });
 
   it('offers to re-run the final checks when every task is done, and reports what the agents delivered', () => {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { apiService } from '@/shared/services/apiService';
+import { formatDuration } from './transcript';
 
 export interface UsageEntry {
   id: string;
@@ -57,25 +58,6 @@ export function useChatUsage(threadId: string | undefined, scope: string, enable
   }, [threadId, key, enabled, expectingWork]);
   return { snapshot: loaded?.key === key ? loaded.snapshot : null, now: clock };
 }
-export function entriesAtMessage(messages: Array<{id: string; senderType: string; orchestrationRunId?: string}>, messageId: string, entries: UsageEntry[]): UsageEntry[] {
-  const at = messages.findIndex(message => message.id === messageId);
-  if (at < 0 || messages[at].senderType === 'system') return [];
-  let user = at;
-  while (user >= 0 && messages[user].senderType !== 'user') user--;
-  if (user < 0) return [];
-  let last = user;
-  for (let i = user + 1; i < messages.length && messages[i].senderType !== 'user'; i++) {
-    if (messages[i].senderType !== 'system') last = i;
-  }
-  if (at !== last) return [];
-  const request = messages[user].id;
-  const builds = new Set(messages.slice(user, last + 1).flatMap(message => message.orchestrationRunId ? [message.orchestrationRunId] : []));
-  return entries.filter(entry => entry.messageId === request || Boolean(entry.orchestrationRunId && builds.has(entry.orchestrationRunId)));
-}
-function duration(ms: number) {
-  const seconds = Math.floor(ms / 1000);
-  return seconds >= 60 ? `${Math.floor(seconds / 60)}m ${seconds % 60}s` : `${seconds}s`;
-}
 function tokens(entries: UsageEntry[]) {
   const total = usageTotal(entries);
   const partial = entries.some(entry => entry.usage.totalTokens === undefined || entry.status === 'interrupted');
@@ -92,6 +74,24 @@ function cost(entries: UsageEntry[]) {
   return parts.length ? parts.join(' · ') : 'Cost unknown';
 }
 
+/** When the provider last reported this entry's usage, or that it has not yet. */
+function reportedNote(entry: UsageEntry): string {
+  if (entry.usage.totalTokens !== undefined) return ` · Last reported ${new Date(entry.updatedAt).toLocaleTimeString()}`;
+  return entry.status === 'running' ? ' · Awaiting provider usage' : '';
+}
+
+/** Tokens, time and cost for each piece of work, with what the numbers do and do not mean. */
+export function UsageDetails({ entries, now, names = {} }: { entries: UsageEntry[]; now: number; names?: Record<string, string> }) {
+  return <div className="space-y-2 py-2">
+    {entries.map(entry => <div key={entry.id} className="space-y-1">
+      <div className="text-content-secondary">{names[entry.agentId ?? ''] ?? (entry.agentId === 'alpha-assistant' ? 'Orchestrator' : 'Agent')} · {entry.model ?? entry.provider} · {entry.status}</div>
+      <div>{tokens([entry])} · {formatDuration(workDuration([entry], now))} · {cost([entry])}{reportedNote(entry)}</div>
+      <div className="flex flex-wrap gap-x-3 gap-y-1">{Object.entries(entry.usage).filter(([key]) => key !== 'totalTokens' && key !== 'reportedCostUsd' && key !== 'estimatedCostUsd').map(([key, value]) => <span key={key}>{key.replace(/Tokens$/, '').replace(/([A-Z])/g, ' $1').toLowerCase()}: {value?.toLocaleString()}</span>)}</div>
+    </div>)}
+    <p>Usage is recorded from work Alpha launched. Provider-reported cost and API-equivalent estimates are separate; neither is an actual bill. Cached input and reasoning may overlap other categories, and unknown values stay unknown.</p>
+  </div>;
+}
+
 export function WorkUsageRow({ entries, now, names = {} }: { entries: UsageEntry[]; now: number; names?: Record<string, string> }) {
   const [expanded, setExpanded] = useState(false);
   if (!entries.length) return null;
@@ -100,16 +100,9 @@ export function WorkUsageRow({ entries, now, names = {} }: { entries: UsageEntry
   const label = running ? 'Working for' : latest.status === 'stopped' ? 'Stopped after' : latest.status === 'failed' ? 'Failed after' : latest.status === 'interrupted' ? 'Interrupted after' : 'Worked for';
   return <div className="mt-3 border-b border-divider pb-2 text-[11px] text-content-muted">
     <button type="button" aria-expanded={expanded} onClick={() => setExpanded(value => !value)} className="inline-flex flex-wrap items-center gap-2 py-1 text-left hover:text-content-secondary">
-      <span>{label} {duration(workDuration(entries, now))}</span>
+      <span>{label} {formatDuration(workDuration(entries, now))}</span>
       <span>· {tokens(entries)}</span><span>· {cost(entries)}</span><ChevronRight className={'h-3 w-3 transition-transform ' + (expanded ? 'rotate-90' : '')} />
     </button>
-    {expanded && <div className="space-y-2 py-2">
-      {entries.map(entry => <div key={entry.id} className="space-y-1">
-        <div className="text-content-secondary">{names[entry.agentId ?? ''] ?? (entry.agentId === 'alpha-assistant' ? 'Orchestrator' : 'Agent')} · {entry.model ?? entry.provider} · {entry.status}</div>
-        <div>{tokens([entry])} · {duration(workDuration([entry], now))} · {cost([entry])}{entry.usage.totalTokens !== undefined ? ` · Last reported ${new Date(entry.updatedAt).toLocaleTimeString()}` : entry.status === 'running' ? ' · Awaiting provider usage' : ''}</div>
-        <div className="flex flex-wrap gap-x-3 gap-y-1">{Object.entries(entry.usage).filter(([key]) => key !== 'totalTokens' && key !== 'reportedCostUsd' && key !== 'estimatedCostUsd').map(([key, value]) => <span key={key}>{key.replace(/Tokens$/, '').replace(/([A-Z])/g, ' $1').toLowerCase()}: {value?.toLocaleString()}</span>)}</div>
-      </div>)}
-      <p>Usage is recorded from work Alpha launched. Provider-reported cost and API-equivalent estimates are separate; neither is an actual bill. Cached input and reasoning may overlap other categories, and unknown values stay unknown.</p>
-    </div>}
+    {expanded && <UsageDetails entries={entries} now={now} names={names} />}
   </div>;
 }
