@@ -4,14 +4,14 @@
  * vite.config.ts, so it runs before the app bundle; it is not imported by the app.
  *
  * First visit in a session: a white point streaks in and hits where the A's
- * apex will be, the impact blooms, light draws the mark stroke by stroke in
- * the brand's loading order (legs, base, inner A, orbit, trails), the
- * wordmark writes in beside it, and once the page is ready the camera dives
- * through the inner A. Repeat visits get the short version (lockup, then dive).
+ * apex will be, the impact blooms, light draws the centered mark stroke by
+ * stroke in the brand's loading order (legs, base, inner A, orbit, trails),
+ * and once the page is ready the camera dives through the inner A. Repeat
+ * visits get the short version (mark, then dive).
  * The exit waits for real readiness (page parsed, loaded, app mounted via
  * window.axLoader.done(), fonts), with a 10s safety reveal.
  */
-import { MARK_APEX, MARK_ASPECT, MARK_COUNTER, MARK_HALF_WIDTH, MARK_ORBIT_CENTRE, MARK_STROKES, markPoint, particleDrawn, sampleMark, seeded, strokeDrawn, type MarkParticle, type Vec } from './markParticles';
+import { MARK_APEX, MARK_COUNTER, MARK_HALF_WIDTH, MARK_ORBIT_CENTRE, MARK_STROKES, markPoint, particleDrawn, sampleMark, seeded, strokeDrawn, type MarkParticle, type Vec } from './markParticles';
 
 type Loader = { progress: (value: number) => void; done: () => void };
 /** The page's window as this script sees it; kept local so the app's Window type is untouched. */
@@ -46,11 +46,6 @@ const BACKGROUND = '#07070c';
   let seen = false;
   try { seen = window.sessionStorage.getItem('ax.intro') === '1'; window.sessionStorage.setItem('ax.intro', '1'); } catch { /* private mode */ }
   const brief = seen || reduced;
-
-  const word = new Image();
-  let wordReady = false;
-  word.onload = () => { wordReady = true; };
-  word.src = '/alphaexplora-wordmark.svg';
 
   /* ---------- readiness ---------- */
   let target = 6, shownP = 0, ready = false;
@@ -140,30 +135,21 @@ const BACKGROUND = '#07070c';
 
   /* ---------- timeline (seconds) ---------- */
   const T = brief
-    ? { comet: -1, impact: -1, birthEnd: -1, name0: 0.05, name1: 0.55, end: 0.6 }
-    : { comet: 0.35, impact: 1.3, birthEnd: 2.75, name0: 2.6, name1: 3.2, end: 3.25 };
-  let start = 0, exitAt = 0, useWord: boolean | null = null, gone = false, frame = 0, ticker = 0;
+    ? { comet: -1, impact: -1, birthEnd: -1, formedAt: 0.05, end: 0.6 }
+    : { comet: 0.35, impact: 1.3, birthEnd: 2.75, formedAt: 2.6, end: 3.25 };
+  let start = 0, exitAt = 0, gone = false, frame = 0, ticker = 0;
 
-  /** R is half the mark's height. The wordmark sits beside it, centred on the A's body, or under it when there's no room. */
+  /** R is half the mark's height; the mark stays centered as a standalone lockup. */
   function layout(w: number, h: number) {
     const R = Math.min(w, h) * (w < 700 ? 0.2 : 0.17);
-    const ratio = (word.naturalWidth / word.naturalHeight) || 15;
-    const halfW = R * MARK_ASPECT, gap = R * 0.34;
-    let wordH = R * 0.4, wordW = wordH * ratio;
-    if (2 * halfW + gap + wordW > w * 0.9) {
-      wordW = Math.min(wordW, w * 0.84); wordH = wordW / ratio;
-      const y = h / 2 - (2 * R + gap + wordH) / 2 + R;
-      return { R, x: w / 2, y, wordX: w / 2 - wordW / 2, wordY: y + R + gap, wordW, wordH, stacked: true };
-    }
-    const total = 2 * halfW + gap + wordW, x = w / 2 - total / 2 + halfW;
-    return { R, x, y: h / 2, wordX: x + halfW + gap, wordY: h / 2 - R * 0.06 - wordH / 2, wordW, wordH, stacked: false };
+    return { R, x: w / 2, y: h / 2 };
   }
 
   /** Everything one frame's painters share. */
   type Frame = {
     c: CanvasRenderingContext2D; t: number; w: number; h: number; L: ReturnType<typeof layout>; R: number;
     /** Exit progress 0–1, and the dive it drives. */
-    exit: number; zoom: number; cx: number; cy: number; apex: Vec; spin: number; impactK: number; name: number;
+    exit: number; zoom: number; cx: number; cy: number; apex: Vec; spin: number; impactK: number;
   };
 
   /** Starfield, with a small shudder at the impact and a rush outwards on the dive. */
@@ -257,20 +243,6 @@ const BACKGROUND = '#07070c';
     c.lineWidth = 1;
   }
 
-  /** The wordmark writes in beside the mark, settling from wide and soft to the logo's spacing. */
-  function drawWordmark({ c, L, name, exit }: Frame) {
-    const show = useWord ? name * (1 - smooth(exit / 0.35)) : 0;
-    if (show <= 0.01) return;
-    const width = L.wordW * (1 + 0.15 * (1 - name));
-    const left = L.stacked ? L.wordX - (width - L.wordW) / 2 : L.wordX;
-    c.save();
-    c.globalAlpha = clamp(show * 1.4);
-    c.beginPath(); c.rect(left - 6, L.wordY - 10, (width + 12) * smooth(name * 1.2), L.wordH + 20); c.clip();
-    if ('filter' in c) c.filter = 'blur(' + ((1 - name) * 4).toFixed(1) + 'px)';
-    c.drawImage(word, left, L.wordY, width, L.wordH);
-    c.restore();
-  }
-
   /** Sizes the canvas to its box and clears it; null while it has no size. */
   function surface(c: CanvasRenderingContext2D, cv: HTMLCanvasElement) {
     const w = cv.clientWidth, h = cv.clientHeight;
@@ -285,10 +257,9 @@ const BACKGROUND = '#07070c';
     return { w, h };
   }
 
-  /** Per-frame bookkeeping: rebuild the plates on a real resize, decide on the wordmark once, move the progress line. */
-  function keepUp(t: number, R: number) {
+  /** Per-frame bookkeeping: rebuild the plates on a real resize and move the progress line. */
+  function keepUp(R: number) {
     if (!plates || Math.abs(R - plateR) / plateR > 0.08) { plates = { fixed: plate(R, false), orbit: plate(R, true) }; plateR = R; }
-    if (useWord === null && t >= T.name0) useWord = wordReady;
     shownP = reduced ? target : shownP + (target - shownP) * 0.08;
     if (line) line.style.transform = 'scaleX(' + (shownP / 100).toFixed(3) + ')';
   }
@@ -312,31 +283,28 @@ const BACKGROUND = '#07070c';
     const { w, h } = size;
 
     const L = layout(w, h), R = L.R;
-    keepUp(t, R);
+    keepUp(R);
     const exit = exitProgress(now, t);
-    const name = useWord ? smooth((t - T.name0) / (T.name1 - T.name0)) : 0;
     const breathe = 1 + (reduced ? 0 : 0.012 * Math.sin(t * 1.6));
     const zoom = (1 + 11 * exit * exit * exit) * breathe;
-    // The mark's centre on screen: centred while it forms, beside the wordmark once named, and
-    // on the dive, placed so the inner A's counter stays at the middle of the screen.
-    const cx = lerp(lerp(w / 2, L.x, name), w / 2 - MARK_COUNTER[0] * R * zoom, smooth(exit));
-    const cy = lerp(lerp(h / 2, L.y, name), h / 2 - MARK_COUNTER[1] * R * zoom, smooth(exit));
+    // Keep the standalone mark centered as it forms, then bring its inner counter
+    // to the center for the exit dive.
+    const cx = lerp(L.x, w / 2 - MARK_COUNTER[0] * R * zoom, smooth(exit));
+    const cy = lerp(L.y, h / 2 - MARK_COUNTER[1] * R * zoom, smooth(exit));
     const F: Frame = {
-      c: ctx, t, w, h, L, R, exit, zoom, cx, cy, name,
+      c: ctx, t, w, h, L, R, exit, zoom, cx, cy,
       apex: [cx + MARK_APEX[0] * R * zoom, cy + MARK_APEX[1] * R * zoom],
       spin: reduced ? 0 : -t * 0.1,
       impactK: T.impact >= 0 && t >= T.impact ? clamp((t - T.impact) / 0.9) : -1,
     };
     const birth = T.impact >= 0 ? clamp((t - T.impact) / (T.birthEnd - T.impact)) : 1;
-    const formed = brief ? smooth((t - T.name0) / 0.4) : smooth((birth - 0.85) / 0.15);
+    const formed = brief ? smooth((t - T.formedAt) / 0.4) : smooth((birth - 0.85) / 0.15);
 
     drawStars(F);
     drawComet(F);
     drawBirth(F, birth);
     drawPlates(F, formed * (1 - smooth((exit - 0.35) / 0.65)));
     drawImpact(F);
-    drawWordmark(F);
-
     if (exit >= 1 || (reduced && exitAt && now - exitAt > 300)) finish();
   }
 

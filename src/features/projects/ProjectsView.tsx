@@ -220,7 +220,6 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
   if (selectedProject) {
     const totalCount = issues.filter(i => i.projectId === selectedProject.id).length;
     const doneCount = issues.filter(i => i.projectId === selectedProject.id && i.status === 'done').length;
-    const progressPercent = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
 
     return (
       <div className="h-full flex flex-col overflow-hidden bg-shell text-content-secondary select-none font-sans">
@@ -255,32 +254,16 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
 
           <div className="ml-auto flex min-w-0 justify-end">{tabs}</div>
 
-          <div className="flex shrink-0 items-center gap-2">
-            <span className="hidden text-xs tabular-nums text-status-success xl:inline" aria-label="Project progress">
-              {doneCount}/{totalCount} done ({progressPercent}%)
-            </span>
-            {showAi && can('publish_build') && (
-              <button
-                type="button"
-                onClick={() => setBuildReviewOpen(true)}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-divider bg-selected px-3 py-1.5 text-xs font-medium text-selected-content transition-colors hover:bg-surface-high"
-              >
-                <Workflow className="h-3.5 w-3.5" aria-hidden />
-                Build review
-              </button>
-            )}
-            {/* Edit Project */}
-            {canEditProjects && (
-              <button
-                onClick={() => setEditingProject(selectedProject)}
-                className="p-1.5 rounded-xl bg-surface-raised hover:bg-surface-high border border-divider text-content-secondary hover:text-content transition-colors"
-                title="Edit Project Details"
-              >
-                <Edit3 className="w-4 h-4" />
-              </button>
-            )}
-
-          </div>
+          {showAi && can('publish_build') && (
+            <button
+              type="button"
+              onClick={() => setBuildReviewOpen(true)}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-divider bg-selected px-3 py-1.5 text-xs font-medium text-selected-content transition-colors hover:bg-surface-high"
+            >
+              <Workflow className="h-3.5 w-3.5" aria-hidden />
+              Build review
+            </button>
+          )}
         </div>
           )}
           qaStudio={role==='pm'?<PmProjectQaStudio key={`${activeWorkspaceId}:${selectedProject.id}`} projectId={selectedProject.id} projectName={selectedProject.name}
@@ -299,7 +282,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
               onOpenNewIssue={canManageIssues ? () => onOpenNewIssue?.() : () => {}}
             />
           )}
-          details={(
+          settings={(
             <div className="mx-auto grid max-w-6xl gap-4 text-xs lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
               <div className="space-y-4">
                 <section aria-labelledby="project-about" className="rounded-xl border border-divider bg-surface-raised p-4">
@@ -307,7 +290,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                     <h2 id="project-about" className="text-[13px] font-semibold text-content">About this project</h2>
                     {canEditProjects && (
                       <button type="button" onClick={() => setEditingProject(selectedProject)} className="inline-flex items-center gap-1 text-content-secondary hover:text-content">
-                        <Edit3 className="h-3 w-3" aria-hidden />Edit
+                        <Edit3 className="h-3 w-3" aria-hidden />Edit project
                       </button>
                     )}
                   </div>
@@ -402,8 +385,8 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
               onOrgChange={(org) => updateProject(selectedProject.id, { githubOrg: org })}
               readOnly={!canEditProjects}
               canCreateRepository={canProvisionRepositories}
-              onRepositoryCreated={(_repositories, previewRepository) => {
-                setRepositoryFocus({ projectId: selectedProject.id, repo: previewRepository });
+              onRepositoryCreated={(_repositories, hostingRepository) => {
+                setRepositoryFocus({ projectId: selectedProject.id, repo: hostingRepository });
                 setResourcesModalOpen(false);
               }}
             />

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { ArrowLeft, ArrowRight, Flag, ListChecks, MessagesSquare, Monitor, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { LoadingRows } from '@/shared/components/ui/skeleton';
@@ -138,6 +138,8 @@ export function ClientProjectConversation(props: Readonly<ClientProjectConversat
   const actions = useConversationActions(api, project, conversation);
   const [draft, setDraft] = useState('');
   const [railTab, setRailTab] = useState<RailTab>('chat');
+  const chatPane = useRef<HTMLElement | null>(null);
+  const previousChatBounds = useRef<DOMRect | null>(null);
   const { jump, toRequest } = useConversationJump();
   const target = useReplyTarget(request.ticket, selectedTicketId, readOnly);
   const { workspaceId, projectId } = project;
@@ -155,6 +157,37 @@ export function ClientProjectConversation(props: Readonly<ClientProjectConversat
   const shared = Boolean(project.preview);
   const changeView = props.onProjectViewChange;
   const { mode, focused } = projectMode(props.projectView ?? 'auto', shared);
+  const changeProjectView = (nextView: ClientProjectView) => {
+    const nextMode = projectMode(nextView, shared).mode;
+    if (nextMode !== mode) {
+      previousChatBounds.current = chatPane.current?.getBoundingClientRect() ?? null;
+      if (nextMode === 'preview' && !writingRequest) setRailTab('chat');
+    }
+    changeView?.(nextView);
+  };
+  useLayoutEffect(() => {
+    const previous = previousChatBounds.current;
+    previousChatBounds.current = null;
+    const pane = chatPane.current;
+    if (!pane || !previous?.width || typeof pane.animate !== 'function'
+      || !window.matchMedia('(min-width: 1001px) and (prefers-reduced-motion: no-preference)').matches) return;
+    const next = pane.getBoundingClientRect();
+    if (!next.width) return;
+
+    // Resize the actual chat so messages reflow as it moves into the rail.
+    pane.classList.add('is-docking');
+    const animation = pane.animate([
+      { width: `${previous.width}px`, height: `${previous.height}px`,
+        transform: `translate(${previous.left - next.left}px, ${previous.top - next.top}px)` },
+      { width: `${next.width}px`, height: `${next.height}px`, transform: 'translate(0, 0)' },
+    ], { duration: 260, easing: 'cubic-bezier(.22, .8, .25, 1)' });
+    const clearDocking = () => pane.classList.remove('is-docking');
+    animation.onfinish = clearDocking;
+    return () => {
+      animation.cancel();
+      clearDocking();
+    };
+  }, [mode]);
   const send = (body: string) => {
     const work: () => Promise<unknown> = target.about ? () => props.onReplyAbout(body) : () => actions.sendToProject(body);
     void actions.run(work, 'Your message was not sent. Try again.').then(result => { if (result !== null) setDraft(''); });
@@ -170,14 +203,14 @@ export function ClientProjectConversation(props: Readonly<ClientProjectConversat
     target.clear();
     setDraft(current => current.trim() ? current : PREVIEW_QUESTION);
     setRailTab('chat');
-    if (focused) changeView?.('preview');
+    if (focused) changeProjectView('preview');
     // A second frame lets the conversation come back first when it was folded away.
     window.requestAnimationFrame(() => window.requestAnimationFrame(() => document.getElementById(inputId)?.focus()));
   };
   const head = <ConversationHead project={project} onBack={props.onBack} busy={busy} requestAction={props.requestAction}
     controls={changeView && <>
-      <ViewSwitch mode={mode} onChange={next => changeView(next === 'preview' ? 'preview' : 'conversation')} />
-      {mode === 'preview' && shared && <FocusToggle focused={focused} onChange={next => changeView(next ? 'focus' : 'preview')} />}
+      <ViewSwitch mode={mode} onChange={next => changeProjectView(next === 'preview' ? 'preview' : 'conversation')} />
+      {mode === 'preview' && shared && <FocusToggle focused={focused} onChange={next => changeProjectView(next ? 'focus' : 'preview')} />}
     </>} />;
   const chat = <ProjectConversationChat role="client"
     items={conversation.items} requests={conversation.requests} error={conversation.error} actionError={actions.actionError}
@@ -234,7 +267,7 @@ export function ClientProjectConversation(props: Readonly<ClientProjectConversat
             </button>)}
           </div>
           <section id={tabId('chat')} role="tabpanel" aria-labelledby={tabId('chat') + '-tab'} hidden={railTab !== 'chat'}
-            className="cx-railchat">{chat}</section>
+            ref={element => { chatPane.current = element; }} className="cx-railchat">{chat}</section>
           <div id={tabId('requests')} role="tabpanel" aria-labelledby={tabId('requests') + '-tab'} hidden={railTab !== 'requests'}
             className="cx-railrequests">{requestsPanel}</div>
         </aside>}
@@ -243,7 +276,10 @@ export function ClientProjectConversation(props: Readonly<ClientProjectConversat
   }
   return <section className="cx-request" aria-labelledby="client-conversation-project-title">
     <div className="cx-reqsplit">
-      <section className="cx-reqchat" aria-labelledby="client-conversation-project-title">{head}{chat}</section>
+      <section className="cx-reqchat" aria-labelledby="client-conversation-project-title">
+        {head}
+        <div ref={element => { chatPane.current = element; }} className="cx-main-chat-pane">{chat}</div>
+      </section>
       <aside className="cx-reqrail" aria-label={`Requests and details for ${project.name}`}>{requestsPanel}</aside>
     </div>
   </section>;

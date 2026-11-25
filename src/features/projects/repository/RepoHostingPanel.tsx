@@ -40,6 +40,7 @@ interface RepoHostingPanelProps {
   repo: string;
   /** Same permission as provisioning repositories; the server enforces it regardless. */
   canManage: boolean;
+  onHostingChanged: () => void;
 }
 
 /**
@@ -50,7 +51,7 @@ interface RepoHostingPanelProps {
  * variables" — Alpha sets some of them itself (`managedByAlpha`), the rest
  * come from the platform, and none of them are ever re-readable once secret.
  */
-export const RepoHostingPanel: React.FC<RepoHostingPanelProps> = ({ projectId, repo, canManage }) => {
+export const RepoHostingPanel: React.FC<RepoHostingPanelProps> = ({ projectId, repo, canManage, onHostingChanged }) => {
   const hosting = useRepoResource<HostingStatus>(
     () => apiService.getRepoHosting(projectId, repo),
     `${projectId}|${repo}|hosting`
@@ -78,6 +79,7 @@ export const RepoHostingPanel: React.FC<RepoHostingPanelProps> = ({ projectId, r
       }
       if (problems.length) setActionError(`Hosting is set up, but: ${problems.join(' ')}`);
       hosting.reload();
+      onHostingChanged();
     } catch (err) {
       const { status } = parseApiError(err);
       setActionError(status === 403 ? 'Only a project manager or admin can set up hosting.' : describeRepoError(err));
