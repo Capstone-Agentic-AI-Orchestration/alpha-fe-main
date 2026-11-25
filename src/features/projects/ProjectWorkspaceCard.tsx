@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, Check, Download, FolderInput, FolderMinus, GitBranch, Loader2, Monitor, RefreshCw } from 'lucide-react';
 
 import { apiService, parseApiError } from '@/shared/services/apiService';
-import type { RepositoryCheckout } from '@/shared/types';
+import type { RepositoryCheckout, UserRole } from '@/shared/types';
 import { summarizeCheckouts } from './checkoutSummary';
 import { isDesktop } from '@/shared/desktop';
 
@@ -21,6 +21,15 @@ import { isDesktop } from '@/shared/desktop';
  */
 
 const key = (repo: string) => repo.toLowerCase();
+
+/**
+ * Who is offered copies of a project's code on this computer.
+ *
+ * A build downloads any repository it needs on its own, so a copy is only
+ * useful to someone who opens the code themselves. Project managers and
+ * clients never do, and the clone and link controls only confused them.
+ */
+export const offersComputerCopy = (role: UserRole): boolean => role === 'dev' || role === 'admin';
 
 export interface RepositoryCheckouts {
   /** By `owner/name`, lower-cased. Empty on the web. */
@@ -195,7 +204,7 @@ export const RepoCheckoutLine: React.FC<{
         </div>
       ) : (
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-status-warning">Not on this machine</span>
+          <span className="text-content-secondary">Not on this computer yet. Alpha downloads it on the first build.</span>
           {canBind && (
             <>
               <button
