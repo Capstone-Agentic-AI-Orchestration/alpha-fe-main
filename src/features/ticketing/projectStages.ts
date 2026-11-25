@@ -5,27 +5,27 @@
  */
 
 export type ProjectStage = 'unset' | 'poc' | 'contract' | 'development' | 'completed';
-export type PocStatus = 'draft' | 'published' | 'changes_requested' | 'superseded' | 'approved';
 export type ContractStatus = 'draft' | 'issued' | 'client_signed' | 'countersigned' | 'void';
 export type RoundStatus = 'open' | 'submitted' | 'classified';
 export type RevisionClassification = 'revision' | 'fix' | 'out_of_scope';
 /** A change request outside the contract. Alpha takes no payments: the client is reminded it costs extra, and the PM answers. */
 export type RequestStatus = 'open' | 'will_do' | 'wont_do';
 
+/** A feature as contracts issued before the POC became a stage marker list it in their scope. */
 export interface PocFeature { title: string; detail: string }
-export interface PocVersion {
-  id: string; number: number; status: PocStatus; title: string; summary: string; features: PocFeature[]; screens: string[];
-  outOfScope: string; note: string; contentHash: string | null; createdAt: string; updatedAt: string; publishedAt: string | null;
-  approvedAt: string | null; approvedName: string | null; changeRequest: { body: string; createdAt: string } | null;
-}
 export interface ContractClause { title: string; body: string }
 export interface ContractTerms {
   projectName: string; clientName: string;
-  scope: { pocNumber: number; title: string; summary: string; features: PocFeature[]; screens: string[]; outOfScope: string };
+  /**
+   * What the contract covers, written by the PM. Contracts issued before the POC
+   * became a stage marker also carry the approved POC's number, features,
+   * screens and exclusions, shown exactly as signed.
+   */
+  scope: { title: string; summary: string; pocNumber?: number; features?: PocFeature[]; screens?: string[]; outOfScope?: string };
   deliverables: string[]; revisionLimit: number; clauses: ContractClause[]; notes: string;
 }
 export interface Contract {
-  id: string; pocVersionId: string; status: ContractStatus; terms: ContractTerms; contentHash: string | null;
+  id: string; pocVersionId: string | null; status: ContractStatus; terms: ContractTerms; contentHash: string | null;
   createdAt: string; updatedAt: string; issuedAt: string | null;
   clientSignedName: string | null; clientSignedAt: string | null; pmSignedName: string | null; pmSignedAt: string | null;
 }
@@ -39,14 +39,12 @@ export interface ChangeRequest {
   requestedBy: 'pm' | 'client'; requestedAt: string; reply: string; answeredAt: string | null;
 }
 export type NextActionKind =
-  | 'set_stage' | 'publish_poc' | 'review_poc' | 'issue_contract' | 'sign_contract' | 'countersign_contract'
+  | 'set_stage' | 'complete_poc' | 'issue_contract' | 'sign_contract' | 'countersign_contract'
   | 'answer_request' | 'share_build' | 'submit_round' | 'classify_round' | 'accept_final';
 export interface StageNextAction { who: 'client' | 'pm'; kind: NextActionKind; label: string }
 export interface StageSummary {
   stage: ProjectStage; stageLabel: string; revisionLimit: number; revisionsUsed: number; version: number; stageChangedAt: string;
   nextAction: StageNextAction | null;
-  poc: PocVersion | null; pocDraft: PocVersion | null;
-  pocHistory: Array<{ id: string; number: number; status: PocStatus; publishedAt: string | null }>;
   contract: Contract | null; rounds: RevisionRound[]; requests: ChangeRequest[];
   final: { deliveredAt: string; note: string; acceptedAt: string | null; acceptedName: string | null } | null;
   clientId?: string;
@@ -76,7 +74,6 @@ export function stageSteps(stage: ProjectStage): Array<(typeof STAGE_STEPS)[numb
 
 /** What the reader sees about the revision allowance, or null outside development. */
 export function revisionAllowance(summary: Pick<StageSummary, 'stage' | 'revisionLimit' | 'revisionsUsed'>): string | null {
-  if (summary.stage === 'poc') return 'Unlimited changes';
   if (summary.stage !== 'development') return null;
   const extra = extraRounds(summary);
   return `Revisions: ${Math.min(summary.revisionsUsed, summary.revisionLimit)} of ${summary.revisionLimit} used`
@@ -120,6 +117,8 @@ export function stageEventLine(event: StageEventInfo, author: 'client' | 'pm', r
   const named = event.name ? ` (signed as ${event.name})` : '';
   switch (event.action) {
     case 'stage_set': return `${who} set the project’s stage to ${STAGE_STEPS.find(step => step.stage === event.stage)?.label ?? 'a new stage'}`;
+    case 'poc_completed': return `${who} moved the project to the contract stage`;
+    // Events from before the POC became a stage marker.
     case 'poc_published': return `${who} shared ${poc} for review`;
     case 'poc_changes_requested': return `${who} asked for changes to ${poc}`;
     case 'poc_approved': return `${who} approved ${poc}${named} · Next: the contract`;
@@ -149,12 +148,12 @@ function invalid(): never { throw new Error('The project stage could not be read
 const oneOf = <T extends string>(values: readonly T[]) => (value: unknown): value is T => values.includes(value as T);
 
 const STAGES = oneOf<ProjectStage>(['unset', 'poc', 'contract', 'development', 'completed']);
-const POC_STATUSES = oneOf<PocStatus>(['draft', 'published', 'changes_requested', 'superseded', 'approved']);
 const CONTRACT_STATUSES = oneOf<ContractStatus>(['draft', 'issued', 'client_signed', 'countersigned', 'void']);
 const ROUND_STATUSES = oneOf<RoundStatus>(['open', 'submitted', 'classified']);
 const CLASSIFICATIONS = oneOf<RevisionClassification>(['revision', 'fix', 'out_of_scope']);
 const REQUEST_STATUSES = oneOf<RequestStatus>(['open', 'will_do', 'wont_do']);
-const ACTIONS = oneOf<NextActionKind>(['set_stage', 'publish_poc', 'review_poc', 'issue_contract', 'sign_contract', 'countersign_contract',
+const LEGACY_POC_ACTIONS = new Set(['publish_poc', 'review_poc']);
+const ACTIONS = oneOf<NextActionKind>(['set_stage', 'complete_poc', 'issue_contract', 'sign_contract', 'countersign_contract',
   'answer_request', 'share_build', 'submit_round', 'classify_round', 'accept_final']);
 
 function features(value: unknown): PocFeature[] {
@@ -169,46 +168,34 @@ function strings(value: unknown): string[] {
   return value as string[];
 }
 
-function parsePoc(value: unknown): PocVersion | null {
-  if (value === null) return null;
-  if (!record(value) || !nonEmpty(value.id) || !int(value.number) || !POC_STATUSES(value.status) || !str(value.title) || !str(value.summary)
-    || !str(value.outOfScope) || !str(value.note) || !strOrNull(value.contentHash) || !nonEmpty(value.createdAt) || !nonEmpty(value.updatedAt)
-    || !strOrNull(value.publishedAt) || !strOrNull(value.approvedAt) || !strOrNull(value.approvedName)) invalid();
-  const change = value.changeRequest;
-  if (change !== null && !(record(change) && str(change.body) && nonEmpty(change.createdAt))) invalid();
-  return {
-    id: value.id, number: value.number, status: value.status, title: value.title, summary: value.summary,
-    features: features(value.features), screens: strings(value.screens), outOfScope: value.outOfScope, note: value.note,
-    contentHash: value.contentHash, createdAt: value.createdAt, updatedAt: value.updatedAt, publishedAt: value.publishedAt,
-    approvedAt: value.approvedAt, approvedName: value.approvedName,
-    changeRequest: change ? { body: change.body as string, createdAt: change.createdAt as string } : null,
-  };
-}
-
 function parseTerms(value: unknown): ContractTerms {
   if (!record(value) || !str(value.projectName) || !str(value.clientName) || !record(value.scope) || !int(value.revisionLimit)
     || !Array.isArray(value.clauses) || !str(value.notes)) invalid();
   const scope = value.scope;
-  if (!int(scope.pocNumber) || !str(scope.title) || !str(scope.summary) || !str(scope.outOfScope)) invalid();
+  if (!str(scope.title) || !str(scope.summary) || !(scope.pocNumber === undefined || int(scope.pocNumber))
+    || !(scope.outOfScope === undefined || str(scope.outOfScope))) invalid();
   const clauses = value.clauses.map(clause => {
     if (!record(clause) || !str(clause.title) || !str(clause.body)) invalid();
     return { title: clause.title, body: clause.body };
   });
   return {
     projectName: value.projectName, clientName: value.clientName,
-    scope: { pocNumber: scope.pocNumber, title: scope.title, summary: scope.summary, features: features(scope.features),
-      screens: strings(scope.screens), outOfScope: scope.outOfScope },
+    scope: { title: scope.title, summary: scope.summary,
+      ...(int(scope.pocNumber) ? { pocNumber: scope.pocNumber } : {}),
+      ...(scope.features === undefined ? {} : { features: features(scope.features) }),
+      ...(scope.screens === undefined ? {} : { screens: strings(scope.screens) }),
+      ...(str(scope.outOfScope) ? { outOfScope: scope.outOfScope } : {}) },
     deliverables: strings(value.deliverables), revisionLimit: value.revisionLimit, clauses, notes: value.notes,
   };
 }
 
 function parseContract(value: unknown): Contract | null {
   if (value === null) return null;
-  if (!record(value) || !nonEmpty(value.id) || !nonEmpty(value.pocVersionId) || !CONTRACT_STATUSES(value.status)
+  if (!record(value) || !nonEmpty(value.id) || !(value.pocVersionId === null || nonEmpty(value.pocVersionId)) || !CONTRACT_STATUSES(value.status)
     || !strOrNull(value.contentHash) || !nonEmpty(value.createdAt) || !nonEmpty(value.updatedAt) || !strOrNull(value.issuedAt)
     || !strOrNull(value.clientSignedName) || !strOrNull(value.clientSignedAt) || !strOrNull(value.pmSignedName) || !strOrNull(value.pmSignedAt)) invalid();
   return {
-    id: value.id, pocVersionId: value.pocVersionId, status: value.status, terms: parseTerms(value.terms), contentHash: value.contentHash,
+    id: value.id, pocVersionId: value.pocVersionId as string | null, status: value.status, terms: parseTerms(value.terms), contentHash: value.contentHash,
     createdAt: value.createdAt, updatedAt: value.updatedAt, issuedAt: value.issuedAt,
     clientSignedName: value.clientSignedName, clientSignedAt: value.clientSignedAt, pmSignedName: value.pmSignedName, pmSignedAt: value.pmSignedAt,
   };
@@ -243,21 +230,17 @@ function parseRequest(value: unknown): ChangeRequest {
 
 export function parseStageSummary(value: unknown): StageSummary {
   if (!record(value) || !STAGES(value.stage) || !str(value.stageLabel) || !int(value.revisionLimit) || !int(value.revisionsUsed)
-    || !int(value.version) || !nonEmpty(value.stageChangedAt) || !Array.isArray(value.pocHistory) || !Array.isArray(value.rounds)
+    || !int(value.version) || !nonEmpty(value.stageChangedAt) || !Array.isArray(value.rounds)
     || !Array.isArray(value.requests)) invalid();
-  const action = value.nextAction;
+  // A server from before the POC became a stage marker still names the written-POC steps; nothing here acts on them.
+  const action = record(value.nextAction) && LEGACY_POC_ACTIONS.has(value.nextAction.kind as string) ? null : value.nextAction;
   if (action !== null && !(record(action) && (action.who === 'client' || action.who === 'pm') && ACTIONS(action.kind) && str(action.label))) invalid();
   const final = value.final;
   if (final !== null && !(record(final) && nonEmpty(final.deliveredAt) && str(final.note) && strOrNull(final.acceptedAt) && strOrNull(final.acceptedName))) invalid();
-  const pocHistory = value.pocHistory.map(item => {
-    if (!record(item) || !nonEmpty(item.id) || !int(item.number) || !POC_STATUSES(item.status) || !strOrNull(item.publishedAt)) invalid();
-    return { id: item.id, number: item.number, status: item.status, publishedAt: item.publishedAt };
-  });
   return {
     stage: value.stage, stageLabel: value.stageLabel, revisionLimit: value.revisionLimit, revisionsUsed: value.revisionsUsed,
     version: value.version, stageChangedAt: value.stageChangedAt,
     nextAction: action ? { who: action.who as 'client' | 'pm', kind: action.kind as NextActionKind, label: action.label as string } : null,
-    poc: parsePoc(value.poc ?? null), pocDraft: parsePoc(value.pocDraft ?? null), pocHistory,
     contract: parseContract(value.contract ?? null), rounds: value.rounds.map(parseRound), requests: value.requests.map(parseRequest),
     final: final ? { deliveredAt: final.deliveredAt as string, note: final.note as string,
       acceptedAt: final.acceptedAt as string | null, acceptedName: final.acceptedName as string | null } : null,

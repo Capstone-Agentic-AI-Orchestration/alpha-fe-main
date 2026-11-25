@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ExternalLink, X } from 'lucide-react';
-import { stageDay } from './PocScopeView';
+import { stageDay } from './stageDates';
 import { SignOffDialog } from './SignOffDialog';
 import type { RevisionClassification, RevisionRound } from './projectStages';
 import type { ClientStagePanelProps } from './ClientStagePanel';

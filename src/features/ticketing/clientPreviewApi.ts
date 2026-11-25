@@ -71,12 +71,6 @@ const sampleProject: ClientProject = {
 const methods: Partial<typeof clientTicketApi> = {
   async getProjectConversation() { return { items: [...PREVIEW_CONVERSATION_ITEMS, ...previewStageEvents()] }; },
   async getProjectStage() { return previewStageSummary('client'); },
-  async requestPocChanges(_workspaceId: string, _projectId: string, pocId: string, input: { body: string }) {
-    return previewStage.requestPocChanges(pocId, input.body);
-  },
-  async approvePoc(_workspaceId: string, _projectId: string, pocId: string, input: { contentHash: string; fullName: string }) {
-    return previewStage.approvePoc(pocId, input.contentHash, input.fullName);
-  },
   async signContract(_workspaceId: string, _projectId: string, contractId: string, input: { contentHash: string; fullName: string }) {
     return previewStage.signContract(contractId, input.contentHash, input.fullName);
   },

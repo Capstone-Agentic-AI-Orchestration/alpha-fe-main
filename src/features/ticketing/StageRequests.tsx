@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Button } from '@/shared/components/ui/button';
 import { Textarea } from '@/shared/components/ui/textarea';
-import { stageDay } from './PocScopeView';
+import { stageDay } from './stageDates';
 import type { ClientStagePanelProps } from './ClientStagePanel';
 import type { PmStagePanelProps } from './PmStagePanel';
 import { COSTS_EXTRA, REQUEST_STATUS_LABEL, type ChangeRequest, type StageSummary } from './projectStages';
