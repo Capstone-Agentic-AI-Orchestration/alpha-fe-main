@@ -71,9 +71,6 @@ const sampleProject: ClientProject = {
 const methods: Partial<typeof clientTicketApi> = {
   async getProjectConversation() { return { items: [...PREVIEW_CONVERSATION_ITEMS, ...previewStageEvents()] }; },
   async getProjectStage() { return previewStageSummary('client'); },
-  async signContract(_workspaceId: string, _projectId: string, contractId: string, input: { contentHash: string; fullName: string }) {
-    return previewStage.signContract(contractId, input.contentHash, input.fullName);
-  },
   async saveRoundItems(_workspaceId: string, _projectId: string, roundId: string, items: string[]) { return previewStage.saveRoundItems(roundId, items); },
   async submitRound(_workspaceId: string, _projectId: string, roundId: string, input: { acknowledgeExtra: boolean }) {
     return previewStage.submitRound(roundId, input.acknowledgeExtra);

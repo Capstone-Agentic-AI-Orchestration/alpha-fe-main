@@ -1,6 +1,6 @@
 /**
- * A project's stages in the PM–client conversation: POC → Contract →
- * Development → Completed. The server decides every rule and whose turn it is;
+ * A project's stages in the PM–client conversation: POC → Development →
+ * Completed. The development contract is signed in person, outside Alpha. The server decides every rule and whose turn it is;
  * this module reads its answer strictly and names things for both sides.
  */
 
@@ -39,7 +39,7 @@ export interface ChangeRequest {
   requestedBy: 'pm' | 'client'; requestedAt: string; reply: string; answeredAt: string | null;
 }
 export type NextActionKind =
-  | 'set_stage' | 'complete_poc' | 'issue_contract' | 'sign_contract' | 'countersign_contract'
+  | 'set_stage' | 'start_development'
   | 'answer_request' | 'share_build' | 'submit_round' | 'classify_round' | 'accept_final';
 export interface StageNextAction { who: 'client' | 'pm'; kind: NextActionKind; label: string }
 export interface StageSummary {
@@ -54,10 +54,9 @@ export interface StageResult { receipt: StageReceipt; stage: StageSummary }
 /** A project card's chip: the stage, and who is being waited on. */
 export interface StageBadge { stage: ProjectStage; label: string; waitingOn: 'client' | 'pm' | null; actionLabel: string | null }
 
-/** The four steps both sides see, in order. */
-export const STAGE_STEPS: ReadonlyArray<{ stage: Exclude<ProjectStage, 'unset'>; label: string; short: string }> = [
+/** The three steps both sides see, in order. The contract is signed in person, between the POC and development. */
+export const STAGE_STEPS: ReadonlyArray<{ stage: Exclude<ProjectStage, 'unset' | 'contract'>; label: string; short: string }> = [
   { stage: 'poc', label: 'Proof of concept', short: 'POC' },
-  { stage: 'contract', label: 'Contract', short: 'Contract' },
   { stage: 'development', label: 'Development', short: 'Development' },
   { stage: 'completed', label: 'Completed', short: 'Completed' },
 ];
@@ -65,7 +64,9 @@ export const STAGE_STEPS: ReadonlyArray<{ stage: Exclude<ProjectStage, 'unset'>;
 export type StepState = 'done' | 'current' | 'upcoming';
 /** Each step's state for the tracker. An unset project shows every step as upcoming. */
 export function stageSteps(stage: ProjectStage): Array<(typeof STAGE_STEPS)[number] & { state: StepState }> {
-  const index = STAGE_STEPS.findIndex(step => step.stage === stage);
+  // The old in-app Contract stage reads as the end of the POC: development starts next.
+  const shown = stage === 'contract' ? 'poc' : stage;
+  const index = STAGE_STEPS.findIndex(step => step.stage === shown);
   return STAGE_STEPS.map((step, position) => ({
     ...step,
     state: index < 0 ? 'upcoming' : position < index ? 'done' : position === index ? (stage === 'completed' ? 'done' : 'current') : 'upcoming',
@@ -117,8 +118,9 @@ export function stageEventLine(event: StageEventInfo, author: 'client' | 'pm', r
   const named = event.name ? ` (signed as ${event.name})` : '';
   switch (event.action) {
     case 'stage_set': return `${who} set the project’s stage to ${STAGE_STEPS.find(step => step.stage === event.stage)?.label ?? 'a new stage'}`;
+    case 'development_started': return `${who} started development · The contract was signed in person`;
+    // Events from before the POC became a stage marker and the contract moved offline.
     case 'poc_completed': return `${who} moved the project to the contract stage`;
-    // Events from before the POC became a stage marker.
     case 'poc_published': return `${who} shared ${poc} for review`;
     case 'poc_changes_requested': return `${who} asked for changes to ${poc}`;
     case 'poc_approved': return `${who} approved ${poc}${named} · Next: the contract`;
@@ -152,8 +154,9 @@ const CONTRACT_STATUSES = oneOf<ContractStatus>(['draft', 'issued', 'client_sign
 const ROUND_STATUSES = oneOf<RoundStatus>(['open', 'submitted', 'classified']);
 const CLASSIFICATIONS = oneOf<RevisionClassification>(['revision', 'fix', 'out_of_scope']);
 const REQUEST_STATUSES = oneOf<RequestStatus>(['open', 'will_do', 'wont_do']);
-const LEGACY_POC_ACTIONS = new Set(['publish_poc', 'review_poc']);
-const ACTIONS = oneOf<NextActionKind>(['set_stage', 'complete_poc', 'issue_contract', 'sign_contract', 'countersign_contract',
+/** Next steps an older server may still name (the written POC and the in-app contract); nothing here acts on them. */
+const LEGACY_ACTIONS = new Set(['publish_poc', 'review_poc', 'complete_poc', 'issue_contract', 'sign_contract', 'countersign_contract']);
+const ACTIONS = oneOf<NextActionKind>(['set_stage', 'start_development',
   'answer_request', 'share_build', 'submit_round', 'classify_round', 'accept_final']);
 
 function features(value: unknown): PocFeature[] {
@@ -232,8 +235,7 @@ export function parseStageSummary(value: unknown): StageSummary {
   if (!record(value) || !STAGES(value.stage) || !str(value.stageLabel) || !int(value.revisionLimit) || !int(value.revisionsUsed)
     || !int(value.version) || !nonEmpty(value.stageChangedAt) || !Array.isArray(value.rounds)
     || !Array.isArray(value.requests)) invalid();
-  // A server from before the POC became a stage marker still names the written-POC steps; nothing here acts on them.
-  const action = record(value.nextAction) && LEGACY_POC_ACTIONS.has(value.nextAction.kind as string) ? null : value.nextAction;
+  const action = record(value.nextAction) && LEGACY_ACTIONS.has(value.nextAction.kind as string) ? null : value.nextAction;
   if (action !== null && !(record(action) && (action.who === 'client' || action.who === 'pm') && ACTIONS(action.kind) && str(action.label))) invalid();
   const final = value.final;
   if (final !== null && !(record(final) && nonEmpty(final.deliveredAt) && str(final.note) && strOrNull(final.acceptedAt) && strOrNull(final.acceptedName))) invalid();

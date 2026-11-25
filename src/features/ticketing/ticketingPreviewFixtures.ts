@@ -5,7 +5,6 @@ import type { TicketDocumentsReadApi } from './ticketDocuments';
 import { previewStage, previewStageEvents, previewStageSummary } from './stagePreviewFixtures';
 import {
   pmTicketApi,
-  type PmContractDraft,
   type PmRoundLabel,
   type PmTicketDetail,
   type PmTicketMessage,
@@ -222,13 +221,7 @@ const localMethods: Partial<typeof pmTicketApi> = {
   async setStartingStage(_projectId: string, _clientId: string, input: { stage: 'poc' | 'development' | 'completed'; revisionsUsed?: number; revisionLimit?: number }) {
     return previewStage.setStartingStage(input);
   },
-  async completePoc() { return previewStage.completePoc(); },
-  async saveContractDraft(_projectId: string, clientId: string, input: PmContractDraft) { return previewStage.saveContractDraft(input, clientId); },
-  async issueContract(_projectId: string, _clientId: string, contractId: string) { return previewStage.issueContract(contractId); },
-  async voidContract(_projectId: string, _clientId: string, contractId: string) { return previewStage.voidContract(contractId); },
-  async countersignContract(_projectId: string, _clientId: string, contractId: string, input: { fullName: string }) {
-    return previewStage.countersignContract(contractId, input.fullName);
-  },
+  async startDevelopment(_projectId: string, _clientId: string, input: { revisionLimit: number }) { return previewStage.startDevelopment(input.revisionLimit); },
   async shareBuild(_projectId: string, _clientId: string, input: { note: string }) { return previewStage.shareBuild(input.note); },
   async classifyRound(_projectId: string, _clientId: string, roundId: string, input: { items: PmRoundLabel[] }) {
     return previewStage.classifyRound(roundId, input.items);

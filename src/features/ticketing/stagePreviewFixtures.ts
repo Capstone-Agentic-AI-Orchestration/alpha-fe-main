@@ -1,6 +1,5 @@
 import type { ConversationItem } from './projectConversation';
-import type { ChangeRequest, Contract, ContractTerms, ProjectStage, RevisionClassification, RevisionRound, StageNextAction, StageResult, StageSummary } from './projectStages';
-import type { PmContractDraft } from './pmApi';
+import type { ChangeRequest, Contract, ProjectStage, RevisionClassification, RevisionRound, StageNextAction, StageResult, StageSummary } from './projectStages';
 
 /**
  * Dev-only stand-in for the stage service, shared by the client and PM UI
@@ -35,14 +34,8 @@ function initial(): PreviewState {
   if (stage === 'unset') return { ...base, stage };
   const at = '2026-10-02T09:00:00+08:00';
   const seeded: PreviewState = { ...base, stage };
-  if (stage === 'contract') return seeded;
-  const terms: ContractTerms = { ...defaultTerms(3), scope: { title: 'Operations dashboard',
-    summary: 'A web dashboard where the operations team tracks daily sales and stock.' }, deliverables: ['Daily sales chart', 'Low-stock alerts'] };
-  const contract: Contract = { id: 'preview-contract-1', pocVersionId: null, status: 'countersigned', terms,
-    contentHash: 'b'.repeat(64), createdAt: at, updatedAt: at, issuedAt: at, clientSignedName: 'Alex Morgan', clientSignedAt: at,
-    pmSignedName: 'Pat Reyes', pmSignedAt: at };
-  if (stage === 'development') return { ...seeded, contract };
-  return { ...seeded, contract, final: { deliveredAt: at, note: '', acceptedAt: at, acceptedName: 'Alex Morgan' } };
+  if (stage === 'contract' || stage === 'development') return seeded;
+  return { ...seeded, final: { deliveredAt: at, note: '', acceptedAt: at, acceptedName: 'Alex Morgan' } };
 }
 
 /** Back to a project that has just started, as on page load. */
@@ -52,13 +45,7 @@ function fail(message: string): never {
   throw Object.assign(new Error(message), { status: 409 });
 }
 
-const POC_ACTION: StageNextAction = { who: 'pm', kind: 'complete_poc', label: 'Move to the contract when the client is ready' };
-
-function contractAction(): StageNextAction {
-  if (state.contract?.status === 'issued') return { who: 'client', kind: 'sign_contract', label: 'Sign the contract' };
-  if (state.contract?.status === 'client_signed') return { who: 'pm', kind: 'countersign_contract', label: 'Countersign the contract' };
-  return { who: 'pm', kind: 'issue_contract', label: 'Issue the contract' };
-}
+const START_ACTION: StageNextAction = { who: 'pm', kind: 'start_development', label: 'Start development once the contract is signed' };
 
 function developmentAction(): StageNextAction {
   const round = activeRound();
@@ -73,8 +60,8 @@ function developmentAction(): StageNextAction {
 function nextAction(): StageNextAction | null {
   switch (state.stage) {
     case 'unset': return { who: 'pm', kind: 'set_stage', label: 'Choose this project’s stage' };
-    case 'poc': return POC_ACTION;
-    case 'contract': return contractAction();
+    case 'poc': return START_ACTION;
+    case 'contract': return START_ACTION;
     case 'development': return developmentAction();
     case 'completed': return requestAction();
   }
@@ -87,14 +74,14 @@ const activeRound = () => state.rounds.find(round => round.status !== 'classifie
 const used = () => state.revisionsOffset + state.rounds.filter(round => round.counts === true).length;
 
 const LABEL: Record<ProjectStage, string> = {
-  unset: 'Stage not set', poc: 'Proof of concept', contract: 'Contract', development: 'Development', completed: 'Completed',
+  unset: 'Stage not set', poc: 'Proof of concept', contract: 'Proof of concept', development: 'Development', completed: 'Completed',
 };
 
 export function previewStageSummary(audience: Actor, clientId?: string): StageSummary {
   return {
     stage: state.stage, stageLabel: LABEL[state.stage], revisionLimit: state.revisionLimit, revisionsUsed: used(),
     version: state.version, stageChangedAt: state.stageChangedAt, nextAction: nextAction(),
-    contract: audience === 'client' && state.contract?.status === 'draft' ? null : state.contract, rounds: [...state.rounds].sort((a, b) => b.number - a.number),
+    contract: state.contract, rounds: [...state.rounds].sort((a, b) => b.number - a.number),
     requests: state.requests, final: state.final,
     ...(audience === 'pm' && clientId ? { clientId } : {}),
   };
@@ -114,27 +101,6 @@ function record(actor: Actor, action: string, refId: string | null, details: Eve
 }
 
 function move(to: ProjectStage) { state.stage = to; state.stageChangedAt = now(); }
-
-const hash = () => (id() + id()).replace(/-/g, '').slice(0, 64);
-
-function defaultTerms(limit: number): ContractTerms {
-  return {
-    projectName: 'Operations Dashboard', clientName: 'Northstar Demo Co.',
-    scope: { title: 'Operations Dashboard', summary: '' }, deliverables: [], revisionLimit: limit, notes: '',
-    clauses: [
-      { title: 'Proof of Concept (POC) Stage', body: 'During the POC stage both parties discussed the proposed design, features and overall concept. This contract sets out the scope agreed at the end of that stage.' },
-      { title: 'Contract Signing', body: 'Both parties sign this development contract, confirming the agreed scope, specifications, deliverables and terms.' },
-      { title: 'Product Development Stage', body: `The developed product includes a maximum of ${limit} rounds of revisions based on the agreed scope. Fixing defects is not a revision. Further rounds cost additional and are billed separately.` },
-      { title: 'Project Completion and Contract Closure', body: 'Upon completion, delivery and final acceptance of the agreed deliverables, this contract is considered closed.' },
-      { title: 'Additional Requests After Contract Closure', body: 'New features or changes outside the agreed scope after closure are subject to additional charges, agreed separately before the work starts.' },
-    ],
-  };
-}
-
-function liveContract(contractId: string, status: Contract['status']): Contract {
-  if (state.contract?.id !== contractId || state.contract.status !== status) fail('This contract changed. Refresh to see the latest.');
-  return state.contract;
-}
 
 function round(roundId: string, status: RevisionRound['status']): RevisionRound {
   const found = state.rounds.find(item => item.id === roundId);
@@ -203,38 +169,6 @@ export const previewStage = {
     move('completed');
     return record('client', 'final_accepted', null, { name: fullName });
   },
-  saveContractDraft(input: PmContractDraft, clientId: string): StageSummary {
-    if (state.stage !== 'contract') fail('The contract can only be prepared during the contract stage.');
-    if (state.contract && state.contract.status !== 'draft') fail('The contract was already issued. Withdraw it first to change it.');
-    const base = state.contract?.terms ?? defaultTerms(state.revisionLimit);
-    const terms = { ...base, scope: input.scope ? { ...base.scope, ...input.scope } : base.scope, deliverables: input.deliverables ?? base.deliverables, clauses: input.clauses ?? base.clauses, notes: input.notes ?? base.notes };
-    state.contract = { id: state.contract?.id ?? id(), pocVersionId: null, status: 'draft', terms, contentHash: null, createdAt: state.contract?.createdAt ?? now(),
-      updatedAt: now(), issuedAt: null, clientSignedName: null, clientSignedAt: null, pmSignedName: null, pmSignedAt: null };
-    state.version += 1;
-    return previewStageSummary('pm', clientId);
-  },
-  issueContract(contractId: string) {
-    const contract = liveContract(contractId, 'draft');
-    state.contract = { ...contract, status: 'issued', issuedAt: now(), contentHash: hash() };
-    return record('pm', 'contract_issued', contractId);
-  },
-  voidContract(contractId: string) {
-    liveContract(contractId, 'issued');
-    state.contract = null;
-    return record('pm', 'contract_voided', contractId);
-  },
-  signContract(contractId: string, contentHash: string, fullName: string) {
-    const contract = liveContract(contractId, 'issued');
-    if (contract.contentHash !== contentHash) fail('The contract changed while you were reading it. Review the latest version.');
-    state.contract = { ...contract, status: 'client_signed', clientSignedName: fullName, clientSignedAt: now() };
-    return record('client', 'contract_signed', contractId, { name: fullName });
-  },
-  countersignContract(contractId: string, fullName: string) {
-    const contract = liveContract(contractId, 'client_signed');
-    state.contract = { ...contract, status: 'countersigned', pmSignedName: fullName, pmSignedAt: now() };
-    move('development');
-    return record('pm', 'contract_countersigned', contractId, { name: fullName });
-  },
   setStartingStage(input: { stage: 'poc' | 'development' | 'completed'; revisionsUsed?: number; revisionLimit?: number }) {
     if (state.stage !== 'unset') fail('This project’s stage is already set.');
     state.revisionLimit = input.revisionLimit ?? 3;
@@ -242,10 +176,11 @@ export const previewStage = {
     move(input.stage);
     return record('pm', 'stage_set', null, { stage: input.stage });
   },
-  completePoc() {
-    if (state.stage !== 'poc') fail('This project is not in the proof-of-concept stage.');
-    move('contract');
-    return record('pm', 'poc_completed', null);
+  startDevelopment(revisionLimit: number) {
+    if (state.stage !== 'poc' && state.stage !== 'contract') fail('Development has already started for this project.');
+    state.revisionLimit = revisionLimit;
+    move('development');
+    return record('pm', 'development_started', null);
   },
 };
 
