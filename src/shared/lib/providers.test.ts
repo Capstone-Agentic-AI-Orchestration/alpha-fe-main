@@ -23,4 +23,10 @@ describe('where a model runs and who makes it', () => {
       { maker: 'OpenAI', models: ['gpt-oss-120b-medium'] }
     ]);
   });
+
+  it('keeps Claude Code aliases together under Anthropic', () => {
+    expect(modelsByMaker(['sonnet', 'opus', 'haiku', 'fable'])).toEqual([
+      { maker: 'Anthropic', models: ['sonnet', 'opus', 'haiku', 'fable'] }
+    ]);
+  });
 });
