@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createBoardSyncCoordinator } from './boardSyncCoordinator';
+import { boardSyncFailureMessage, createBoardSyncCoordinator } from './boardSyncCoordinator';
+import { ApiRequestError } from '@/shared/services/apiService';
 
 afterEach(() => vi.useRealTimers());
 
@@ -115,5 +116,36 @@ describe('board sync coordinator', () => {
     await vi.advanceTimersByTimeAsync(400);
     expect(catchUp).toHaveBeenCalledTimes(2);
     coordinator.dispose();
+  });
+
+  it('tells the caller about a failed catch-up and still retries on the next notice', async () => {
+    vi.useFakeTimers();
+    const failure = new Error('boom');
+    const catchUp = vi.fn().mockRejectedValueOnce(failure).mockResolvedValue(undefined);
+    const onError = vi.fn();
+    const coordinator = createBoardSyncCoordinator(catchUp, 400, onError);
+
+    coordinator.notify();
+    await vi.advanceTimersByTimeAsync(400);
+    expect(onError).toHaveBeenCalledWith(failure);
+
+    coordinator.notify();
+    await vi.advanceTimersByTimeAsync(400);
+    expect(catchUp).toHaveBeenCalledTimes(2);
+    expect(onError).toHaveBeenCalledOnce();
+    coordinator.dispose();
+  });
+});
+
+describe('boardSyncFailureMessage', () => {
+  it('names a board the server could not produce, without the transport prefix', () => {
+    const error = new ApiRequestError(502, 'API Error [502]: Could not read the team board: UNIQUE constraint failed: projects.key');
+    expect(boardSyncFailureMessage(error)).toBe('Could not read the team board: UNIQUE constraint failed: projects.key');
+  });
+
+  it('stays quiet for refusals, dropped connections and anything that is not an error', () => {
+    expect(boardSyncFailureMessage(new ApiRequestError(403, 'API Error [403]: Not in this workspace.'))).toBeNull();
+    expect(boardSyncFailureMessage(new TypeError('Failed to fetch'))).toBeNull();
+    expect(boardSyncFailureMessage('nope')).toBeNull();
   });
 });

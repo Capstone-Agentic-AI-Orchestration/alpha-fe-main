@@ -6,10 +6,27 @@ export interface BoardSyncCoordinator {
   dispose(): void;
 }
 
+/**
+ * What to tell the person when a board catch-up failed, or nothing.
+ *
+ * Only the server saying it could not produce the board (5xx): a desktop
+ * whose team board will not load otherwise just shows an empty workspace,
+ * which reads as "nobody has made a project yet". A dropped connection or a
+ * refusal has its own handling and retries quietly.
+ */
+export function boardSyncFailureMessage(error: unknown): string | null {
+  if (!(error instanceof Error)) return null;
+  const status = (error as { status?: unknown }).status;
+  if (typeof status !== 'number' || status < 500) return null;
+  return error.message.replace(/^API Error \[\d+\]:\s*/, '').trim() || null;
+}
+
 /** Debounce doorbells, recover missed notices, and keep one catch-up in flight. */
 export function createBoardSyncCoordinator(
   catchUp: () => Promise<void>,
-  debounceMs = 400
+  debounceMs = 400,
+  /** Told about each failed catch-up; retrying stays the coordinator's job. */
+  onError?: (error: unknown) => void
 ): BoardSyncCoordinator {
   const delay = Number.isFinite(debounceMs) ? Math.max(0, debounceMs) : 400;
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -44,8 +61,9 @@ export function createBoardSyncCoordinator(
     dirty = false;
     try {
       await catchUp();
-    } catch {
+    } catch (error) {
       // A later doorbell, fallback tick, reconnect, or visibility restore retries.
+      if (!disposed) onError?.(error);
     } finally {
       running = false;
       if (disposed) return;
