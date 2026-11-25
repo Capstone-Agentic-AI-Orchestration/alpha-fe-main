@@ -3,7 +3,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   LayoutDashboard, PenLine, FileText, MessageSquare, Activity,
   CheckSquare, FolderKanban, Rocket, Bot, BarChart3, BookOpen, Settings,
-  Inbox, Users, BellRing
+  Inbox, Users, BellRing, Mail
 } from 'lucide-react';
 
 import { NavigationTab, UserRole } from '@/shared/types';
@@ -143,6 +143,8 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'intake', label: 'New request', title: 'New Request', subtitle: 'Describe what you need in plain language', group: 'primary', section: 'requests', icon: PenLine },
 
   // Inquiries are pre-project intake; tickets are requests that belong to a client's project conversation.
+  // The Inbox lists both, and where each client project is waiting, in one place for the project manager.
+  { id: 'inbox', label: 'Inbox', title: 'Inbox', subtitle: 'Everything clients and prospects have asked for', group: 'workspace', section: 'requests', icon: Mail },
   { id: 'inquiries', label: 'Inquiries', title: 'Inquiries', subtitle: 'Review requests that have not yet become a client project', group: 'workspace', section: 'requests', icon: Inbox },
   { id: 'clients', label: 'Clients', title: 'Clients', subtitle: 'Clients, their projects and requests', group: 'workspace', section: 'clients', icon: Users },
   { id: 'issues', label: 'Tasks', labels: { pm: 'All Tasks', admin: 'All Tasks' }, title: 'Tasks', subtitle: 'Assigned work across your projects', group: 'workspace', section: 'my_work', sectionByRole: { pm: 'projects', admin: 'projects' }, icon: CheckSquare },
@@ -209,7 +211,7 @@ const ROLE_NAV_ALL: Record<UserRole, NavigationTab[]> = {
   dev: ['issues', 'attention', 'projects', 'agents', 'skills', 'chat', 'settings'],
   // Client work starts with the client and project conversation; inquiries remain separate pre-project intake.
   pm: [
-    'clients', 'attention', 'inquiries', 'projects', 'issues',
+    'clients', 'attention', 'inbox', 'inquiries', 'projects', 'issues',
     'chat', 'agents', 'skills', 'analytics', 'settings'
   ],
   admin: [

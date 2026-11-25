@@ -1,5 +1,6 @@
 export type NavigationTab =
   | 'attention'
+  | 'inbox'
   | 'portal'
   | 'intake'
   | 'documents'
