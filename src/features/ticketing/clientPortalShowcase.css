@@ -30,18 +30,21 @@
 .cx-showcase-feature, .cx-showcase-updates { min-width: 0; overflow: hidden; border-color: color-mix(in srgb, var(--cx-line) 88%, transparent); background: color-mix(in srgb, var(--cx-surface) 82%, transparent); backdrop-filter: blur(10px); }
 .cx-showcase-feature { display: flex; flex-direction: column; }
 .cx-showcase-stage { display: flex; min-width: 0; min-height: 0; flex: 1; flex-direction: column; background: color-mix(in srgb, var(--cx-raised) 88%, transparent); }
-.cx-showcase-stage-head { display: flex; flex: none; align-items: center; justify-content: space-between; gap: .75rem; padding: .8rem 1rem; }
 .cx-showcase-picture { position: relative; display: grid; min-height: 0; flex: 1; grid-template-rows: minmax(0, 1fr); }
 .cx-showcase-picture > .cx-thumb { display: flex; width: 100%; height: 100%; min-height: 0; flex-direction: column; border: 0; border-radius: 0; background: transparent; }
-.cx-showcase-stage .cx-thumb-bar { flex: none; }
 .cx-showcase-stage .cx-thumb-screen { min-height: 0; flex: 1; aspect-ratio: auto; }
-.cx-showcase-no-preview { display: grid; place-items: center; padding: .75rem 3rem; color: var(--cx-muted); font-size: var(--client-type-body); text-align: center; }
-.cx-showcase-arrow { position: absolute; z-index: 2; top: 50%; width: 38px; height: 38px; transform: translateY(-50%); border-color: color-mix(in srgb, var(--cx-line) 82%, transparent); border-radius: 50%; background: color-mix(in srgb, var(--cx-surface) 90%, transparent); color: var(--cx-ink); box-shadow: 0 4px 18px rgb(var(--ui-overlay) / .18); }
+.cx-showcase-stage .cx-thumb-screen::after { content: none; }
+.cx-showcase-no-preview { display: grid; place-items: center; color: var(--cx-muted); font-size: var(--client-type-body); text-align: center; }
+.cx-showcase-no-preview, .cx-showcase-stage .cx-thumb-empty { padding: .75rem 3rem 5rem; }
+.cx-showcase-arrow { position: absolute; z-index: 2; top: min(50%, calc(100% - 7rem)); width: 38px; height: 38px; transform: translateY(-50%); border-color: color-mix(in srgb, var(--cx-line) 82%, transparent); border-radius: 50%; background: color-mix(in srgb, var(--cx-surface) 90%, transparent); color: var(--cx-ink); box-shadow: 0 4px 18px rgb(var(--ui-overlay) / .18); }
 .cx-showcase-arrow.is-previous { left: .85rem; }
 .cx-showcase-arrow.is-next { right: .85rem; }
-.cx-showcase-title-copy { min-width: 0; }
+.cx-showcase-overlay { position: absolute; z-index: 1; inset: auto 0 0; padding: 2.25rem 1rem .9rem; background: linear-gradient(transparent, rgb(var(--ui-canvas) / .92) 30%, rgb(var(--ui-canvas) / .98)); pointer-events: none; }
+.cx-showcase-overlay button { pointer-events: auto; }
+.cx-showcase-overlay-actions { display: flex; align-items: center; gap: .5rem; }
+.cx-showcase-overlay-actions h3 { min-width: 0; margin: 0; }
+.cx-showcase-host { margin: .15rem 0 0; overflow: hidden; color: var(--cx-muted); font-size: var(--client-type-meta); text-overflow: ellipsis; white-space: nowrap; }
 .cx-showcase-eyebrow { margin: 0 0 .35rem; color: var(--cx-muted); font-size: var(--client-type-meta); font-weight: var(--client-weight-semibold); letter-spacing: .045em; text-transform: uppercase; }
-.cx-showcase-title-copy h3 { margin: 0; }
 .cx-showcase-stage .cx-showcase-project-link { display: flex; max-width: 100%; min-height: 28px; align-items: center; gap: .5rem; border-radius: var(--client-radius-control); color: var(--cx-ink); font-size: clamp(1.15rem, 1.7vw, 1.5rem); font-weight: var(--client-weight-bold); letter-spacing: -.025em; text-align: left; }
 .cx-showcase-project-link span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cx-showcase-project-link svg, .cx-showcase-open-preview { flex: none; color: var(--cx-accent); }
@@ -76,7 +79,7 @@
   .cx-home-hero { align-items: flex-start; flex-direction: column; gap: .65rem; }
   .cx-home-hero h1 { font-size: clamp(1.5rem, 6vw, 2.2rem); }
   .cx-home-hero-description { margin-top: .5rem; }
-  .cx-showcase-stage-head { padding: .55rem .8rem; }
+  .cx-showcase-overlay { padding: 1.75rem .8rem .65rem; }
   .cx-showcase-arrow { width: 34px; height: 34px; }
   .cx-showcase-arrow.is-previous { left: .55rem; }
   .cx-showcase-arrow.is-next { right: .55rem; }

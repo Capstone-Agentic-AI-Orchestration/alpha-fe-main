@@ -6,7 +6,7 @@ import { Button } from '@/shared/components/ui/button';
 import { Card } from '@/shared/components/ui/card';
 import { LoadingRows } from '@/shared/components/ui/skeleton';
 import type { ClientProject, ClientProjectFeedbackMessage, ClientProjectRequestItem } from './clientApi';
-import { ClientPreviewThumb } from './ClientPreviewThumb';
+import { ClientPreviewThumb, previewHost } from './ClientPreviewThumb';
 import { CxEmpty } from './clientKit';
 import { relativeTime } from './clientFriendly';
 import { clientTicketProgress } from './clientTicketProgress';
@@ -60,6 +60,7 @@ export function ClientProjectShowcase({ project, projects, requests, latestMessa
       body="When the project manager shares a project, it will appear here." /></Card>;
   }
   if (!project) return null;
+  const hostname = project.preview ? previewHost(project.preview.url) : '';
 
   const updates: ShowcaseUpdate[] = [];
   if (latestMessage) updates.push({
@@ -88,22 +89,23 @@ export function ClientProjectShowcase({ project, projects, requests, latestMessa
   return <section className="cx-showcase-layout" aria-label="Project showcase">
     <Card className="cx-showcase-feature" ref={featureRef}>
       <div className="cx-showcase-stage" aria-label={project.name + ' project preview'}>
-        <header className="cx-showcase-stage-head">
-          <div className="cx-showcase-title-copy">
-            <p className="cx-showcase-eyebrow">Featured project · {selectedIndex + 1} of {projects.length}</p>
-            <h3><button type="button" className="cx-showcase-project-link" onClick={() => onOpenProject(project)}>
-              <span>{project.name}</span><ArrowRight size={16} aria-hidden="true" />
-            </button></h3>
-          </div>
-          {project.preview && <Button type="button" variant="ghost" size="icon" className="cx-link cx-showcase-open-preview"
-            aria-label="Open preview" title="Open preview" onClick={() => onOpenPreview(project)}>
-            <Monitor size={16} aria-hidden="true" />
-          </Button>}
-        </header>
         <div className="cx-showcase-picture">
           {project.preview
-            ? <ClientPreviewThumb preview={project.preview} projectName={project.name} onOpen={() => onOpenPreview(project)} />
+            ? <ClientPreviewThumb preview={project.preview} projectName={project.name} showBrowserBar={false} onOpen={() => onOpenPreview(project)} />
             : <div className="cx-showcase-no-preview" role="status">There is still no preview.</div>}
+          <header className="cx-showcase-overlay">
+            <p className="cx-showcase-eyebrow">Featured project · {selectedIndex + 1} of {projects.length}</p>
+            <div className="cx-showcase-overlay-actions">
+              <h3><button type="button" className="cx-showcase-project-link" title={project.name} onClick={() => onOpenProject(project)}>
+                <span>{project.name}</span><ArrowRight size={16} aria-hidden="true" />
+              </button></h3>
+              {project.preview && <Button type="button" variant="ghost" size="icon" className="cx-link cx-showcase-open-preview"
+                aria-label="Open preview" title="Open preview" onClick={() => onOpenPreview(project)}>
+                <Monitor size={16} aria-hidden="true" />
+              </Button>}
+            </div>
+            {hostname && <p className="cx-showcase-host">{hostname}</p>}
+          </header>
           {projects.length > 1 && <>
             <Button type="button" variant="outline" size="icon" className="cx-showcase-arrow is-previous"
               aria-label="Show previous project" onClick={() => go(-1)}><ArrowLeft size={16} aria-hidden="true" /></Button>

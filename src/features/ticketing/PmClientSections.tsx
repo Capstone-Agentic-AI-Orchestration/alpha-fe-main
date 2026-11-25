@@ -333,7 +333,7 @@ export function ClientProjects({ client, projects, knownProjectIds, onOpenProjec
 }) {
   if (!client.projects.length) return <p className="text-[13px] text-content-muted">This client can’t see any projects yet. A project shows here once one of their requests is linked to it and shared with them.</p>;
   if (!projects) return <SkeletonList label="Loading projects" rows={2} />;
-  return <div className="grid gap-x-10 gap-y-8 lg:grid-cols-2">
+  return <div className="grid items-start gap-4 lg:grid-cols-2">
     {projects.map(project => <ClientProjectCard key={project.projectId} client={client} project={project}
       canOpen={knownProjectIds.has(project.projectId)} onOpenProject={onOpenProject} />)}
   </div>;
@@ -346,24 +346,26 @@ function ClientProjectCard({ client, project, canOpen, onOpenProject }: {
   onOpenProject: (projectId: string) => void;
 }) {
   const url = safeUrl(project.previewUrl);
-  return <section aria-label={project.name} className="min-w-0 border-t border-divider pt-4">
-    <div className="flex items-start gap-3 pb-2">
-      <FolderKanban className="mt-0.5 h-4 w-4 shrink-0 text-content-muted" aria-hidden="true" />
-      <div className="min-w-0 flex-1">
-        <h3 className="truncate text-[13px] font-semibold text-content" title={project.name}>{project.name}</h3>
-        <p className="text-[11.5px] text-content-muted">{previewState(project.previewPublished, Boolean(url))}</p>
+  return <section aria-label={project.name} className="min-w-0 rounded-xl border border-divider bg-surface">
+    <header className="flex flex-wrap items-start gap-x-3 gap-y-2 px-4 py-3.5">
+      <div className="flex min-w-0 flex-1 basis-36 items-start gap-3">
+        <FolderKanban className="mt-0.5 h-4 w-4 shrink-0 text-content-muted" aria-hidden="true" />
+        <div className="min-w-0">
+          <h3 className="truncate text-[13px] font-semibold text-content" title={project.name}>{project.name}</h3>
+          <p className="text-[11.5px] text-content-muted">{previewState(project.previewPublished, Boolean(url))}</p>
+        </div>
       </div>
       {/* Enter the project's conversation without routing through the internal project board. */}
       {canOpen && <Button type="button" variant="ghost" size="sm" onClick={() => onOpenProject(project.projectId)}
-        className="h-auto shrink-0 px-0 text-xs font-semibold text-link hover:bg-transparent hover:text-link-hover">
+        className="ml-auto h-auto shrink-0 px-0 text-xs font-semibold text-link hover:bg-transparent hover:text-link-hover">
         Open conversation <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
       </Button>}
-    </div>
-    {url && <a href={url} target="_blank" rel="noreferrer noopener"
-      className="mb-2 inline-flex items-center gap-1 text-xs font-medium text-link hover:text-link-hover">
-      Open preview <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-    </a>}
-    <div className="mt-2">
+    </header>
+    <div className="rounded-b-xl border-t border-divider bg-well/40 px-4 py-3.5">
+      {url && <a href={url} target="_blank" rel="noreferrer noopener"
+        className="mb-3 inline-flex items-center gap-1 text-xs font-medium text-link hover:text-link-hover">
+        Open preview <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+      </a>}
       <h4 className="mb-2 text-[11.5px] font-medium text-content-muted">Latest feedback on this project</h4>
       {project.feedback === null
         ? <p className="text-[12.5px] text-content-muted">Project feedback could not be loaded.</p>

@@ -47,8 +47,9 @@ describe('client overview loading', () => {
     // Waiting work comes before the projects.
     expect(html.indexOf('client-attention-title')).toBeLessThan(html.indexOf('aria-label="Project showcase"'));
     const stage = html.slice(html.indexOf('class="cx-showcase-stage"'), html.indexOf('class="cx-showcase-updates'));
+    expect(stage).toContain('class="cx-showcase-overlay"');
     expect(stage).toContain('Featured project · 1 of 2');
-    expect(stage).toContain('class="cx-showcase-project-link"><span>Shop</span>');
+    expect(stage).toContain('class="cx-showcase-project-link" title="Shop"><span>Shop</span>');
     expect(stage).toContain('Show next project');
     expect(html).not.toContain('Requests in Shop');
     expect(html).not.toContain('Choose a featured project');
@@ -73,10 +74,13 @@ describe('client overview loading', () => {
       onOpenPreview={() => {}} {...callbacks} />);
     const waiting = render(null);
     expect(waiting).toContain('There is still no preview.');
+    expect(waiting).toContain('class="cx-showcase-overlay"');
     expect(waiting).not.toContain('Open preview');
     expect(waiting).not.toContain('cx-thumb');
     const ready = render({ branch: 'uat', url: 'https://shop-uat.vercel.app' });
     expect(ready).toContain('cx-thumb');
+    expect(ready).not.toContain('cx-thumb-bar');
+    expect(ready).toContain('class="cx-showcase-host">shop-uat.vercel.app</p>');
     expect(ready).not.toContain('There is still no preview.');
     expect(ready).toContain('aria-label="Open preview"');
   });

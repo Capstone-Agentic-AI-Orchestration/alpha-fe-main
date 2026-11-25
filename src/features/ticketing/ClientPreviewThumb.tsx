@@ -7,7 +7,7 @@ import { isEmbeddablePreviewUrl } from './ProjectQaStudio';
 const SITE_WIDTH = 1280;
 const SITE_HEIGHT = 800;
 
-function hostOf(value: string): string {
+export function previewHost(value: string): string {
   try { return new URL(value).host; } catch { return ''; }
 }
 
@@ -18,7 +18,12 @@ function hostOf(value: string): string {
  * preview inside the portal. It is a mouse shortcut only: the card's "Open preview" link is the
  * labelled way in for keyboards and screen readers.
  */
-export function ClientPreviewThumb({ preview, projectName, onOpen }: { preview: ClientProjectPreview | null; projectName: string; onOpen?: () => void }) {
+export function ClientPreviewThumb({ preview, projectName, onOpen, showBrowserBar = true }: Readonly<{
+  preview: ClientProjectPreview | null;
+  projectName: string;
+  onOpen?: () => void;
+  showBrowserBar?: boolean;
+}>) {
   const screen = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState({ width: 0, height: 0 });
   const live = preview !== null && isEmbeddablePreviewUrl(preview.url);
@@ -44,7 +49,7 @@ export function ClientPreviewThumb({ preview, projectName, onOpen }: { preview: 
       <span>{preview ? 'Open the preview to see the latest version.' : 'The project manager hasn’t shared a preview yet.'}</span></div>;
   }
   return <div className={'cx-thumb' + (onOpen ? ' is-openable' : '')} onClick={onOpen} role="presentation">
-    <div className="cx-thumb-bar" aria-hidden="true"><i /><i /><i /><span>{preview ? hostOf(preview.url) : 'Preview'}</span></div>
+    {showBrowserBar && <div className="cx-thumb-bar" aria-hidden="true"><i /><i /><i /><span>{preview ? previewHost(preview.url) : 'Preview'}</span></div>}
     <div ref={screen} className="cx-thumb-screen" aria-hidden={live ? true : undefined}>{picture}</div>
   </div>;
 }
