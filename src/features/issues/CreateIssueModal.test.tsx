@@ -7,11 +7,12 @@ vi.hoisted(() => { (globalThis as { window?: unknown }).window ??= globalThis; }
 let canRunBuilds = true;
 let visibleTabs = ['clients'];
 let sessionValues: Record<string, unknown> = {};
+let projects = [{ id: 'p1', name: 'Website refresh', key: 'WEB' }];
 vi.mock('@/app/AppContext', () => ({
   useApp: () => ({
     createIssue: vi.fn(),
     showToast: vi.fn(),
-    projects: [{ id: 'p1', name: 'Website refresh', key: 'WEB' }],
+    projects,
     identity: { login: 'maya-reyes', name: 'Maya Reyes' },
     visibleTabs,
     can: (capability: string) => capability !== 'run_builds' || canRunBuilds
@@ -56,6 +57,24 @@ describe('New task dialog', () => {
     visibleTabs = ['clients'];
     sessionValues = {};
     expect(render()).not.toContain('Client request');
+  });
+
+  it('opened from a request, shows its project and request instead of asking for them', () => {
+    projects = [{ id: 'p1', name: 'Website refresh', key: 'WEB' }, { id: 'p2', name: 'Resort site', key: 'RES' }];
+    expect(render()).toContain('Project</span>');
+    sessionValues = {
+      'issueModal.project': 'p1',
+      'issueModal.projectLocked': true,
+      'issueModal.linkedRequest': { ticketId: 't-1', reference: 'TKT-28EC59', title: 'Add a contact form', source: 'conversation' }
+    };
+    const html = render();
+    expect(html).toContain('In Website refresh');
+    expect(html).toContain('TKT-28EC59');
+    expect(html).toContain('Add a contact form');
+    expect(html).not.toContain('Project</span>');
+    expect(html).not.toContain('Not for a client request');
+    sessionValues = {};
+    projects = [{ id: 'p1', name: 'Website refresh', key: 'WEB' }];
   });
 
   it('explains why creation is disabled until the required title is present', () => {
