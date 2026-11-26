@@ -118,18 +118,18 @@ function AlphaPmPreviewShell({ onViewAsClient, onReset }: { onViewAsClient: () =
           <div className="flex h-full min-h-0 flex-col">
             <div className="pm-ticket-preview__notice"><FlaskConical size={12} />Design preview · fictional records · changes are disabled</div>
             <div className="pm-ticket-page pm-ticket-page--nested flex min-h-0 flex-1 flex-col">
-              <div className="flex shrink-0 justify-end border-b border-divider px-4 py-1">
-                <Button variant="ghost" size="sm" onClick={() => setPreviewRefreshToken(value => value + 1)} aria-label={`Refresh ${previewSection}`} title={`Refresh ${previewSection}`}>
-                  <RefreshCw size={14} aria-hidden="true" /><span>Refresh {navLabel(previewSection, 'pm').toLowerCase()}</span>
+              {previewSection === 'clients' && <div className="flex shrink-0 justify-end border-b border-divider px-4 py-1">
+                <Button variant="ghost" size="sm" onClick={() => setPreviewRefreshToken(value => value + 1)} aria-label="Refresh clients" title="Refresh clients">
+                  <RefreshCw size={14} aria-hidden="true" /><span>Refresh clients</span>
                 </Button>
-              </div>
+              </div>}
               <div role="tabpanel" aria-label={navLabel(previewSection, 'pm')} className="pm-ticket-page__content min-h-0 flex-1">
                 {previewSection === 'clients' ? <PmClientsWorkspace api={pmPreviewApi} documentsApi={pmPreviewDocumentsApi} workspaceKey="preview"
                 selectedKey={previewClientKey} onSelectKey={setPreviewClientKey} section={previewClientSection} onSection={setPreviewClientSection}
                 knownProjectIds={PREVIEW_PROJECT_IDS} onOpenProject={projectId => { setPreviewConversationFocus({ projectId }); setPreviewClientSection('conversation'); }}
                 conversationFocus={previewConversationFocus} onConversationFocusHandled={() => setPreviewConversationFocus(null)}
                 onOpenInquiries={() => setPreviewSection('inquiries')} refreshToken={previewRefreshToken} />
-                : <PmCentralIntakeInbox workspaceId="preview-workspace" workspaceName="Northstar Demo" workspaceCanReview onAccepted={() => setPreviewSection('clients')} api={pmPreviewIntakeApi} projects={pmPreviewProjects} refreshToken={previewRefreshToken} />}
+                : <PmCentralIntakeInbox workspaceId="preview-workspace" workspaceName="Northstar Demo" workspaceCanReview onAccepted={() => setPreviewSection('clients')} api={pmPreviewIntakeApi} projects={pmPreviewProjects} />}
               </div>
             </div>
           </div>

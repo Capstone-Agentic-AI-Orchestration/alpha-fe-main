@@ -3,6 +3,7 @@ import { PmQueueSelect } from './PmQueueSelect';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { AlertCircle, ArrowLeft, CalendarDays, CheckCircle2, Copy, FolderPlus, Inbox, Rocket, Mail, MessageSquare, PanelLeftOpen, RefreshCw, Search, Send, UserRound, XCircle } from 'lucide-react';
 import { acceptOutcome, handledOutcome, inquiryContact, inquiryFor, inquiryKind, inquiryStatus, shortReference } from './inquiryPresentation';
+import { Button } from '@/shared/components/ui/button';
 import { Skeleton, SkeletonRegion } from '@/shared/components/ui/skeleton';
 import { ApiRequestError } from '@/shared/services/apiService';
 import { pmTicketApi, type PmCentralIntakeItem, type PmIntakeProjectChoice, type PmIntakeProjectStart } from './pmApi';
@@ -60,7 +61,7 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
   /** Called with the new request's reference and id, so the page can open it. */
   onAccepted: (reference: string, ticketId: string) => void;
   api?: CentralIntakeApi;
-  /** Parent-owned refresh control shared with the Tickets/Inquiries subtab. */
+  /** Reload after a project or client invitation is created by the page. */
   refreshToken?: number;
   /** Open this inquiry once it loads, e.g. from a client's Proposals tab. */
   initialSelection?: { id: string; view: 'pending' | 'handled' } | null;
@@ -338,6 +339,12 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
     </button>;
   };
 
+  const refreshAction = <Button variant="outline" size="icon" className="h-[34px] w-[34px] shrink-0"
+    aria-label="Refresh inquiries" title="Refresh inquiries" disabled={loading || loadingMore || accepting || declining || sendingClarification}
+    onClick={() => void load()}>
+    <RefreshCw size={14} aria-hidden="true" className={loading ? 'motion-safe:animate-spin' : undefined} />
+  </Button>;
+
   const statusControls = (className: string) => <div className={`pm-inquiries__status-toggle ${className}`} role="group" aria-label="Inquiry status">
     {(['pending', 'handled'] as const).map(value => <button key={value} type="button" aria-pressed={filter === value}
       disabled={accepting || declining} onClick={() => setFilter(value)} className={filter === value ? 'is-active' : ''}>
@@ -388,6 +395,7 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
               <input value={searchInput} disabled={loading && items.length === 0} onChange={event => setSearchInput(event.target.value)} placeholder="Search inquiries…" /></label>
             <PmQueueSelect label="Inquiry status" value={filter} onChange={setFilter} disabled={accepting || declining}
               options={[{ value: 'pending', label: 'Pending review', tone: 'attention' }, { value: 'handled', label: 'Handled', tone: 'complete' }]} />
+            {refreshAction}
           </div>
         </header>}
 
@@ -410,6 +418,7 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
               <h2>{selected.title}</h2>
               <p>{selectedContact?.name}{selectedContact?.detail && <><span>·</span>{selectedContact.detail}</>}<span>·</span>{inquiryFor(selected)}</p>
             </div>
+            {refreshAction}
           </div>
         </header>}
 

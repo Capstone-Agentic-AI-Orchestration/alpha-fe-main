@@ -113,6 +113,8 @@ describe('real ticketing interfaces in the Alpha app', () => {
     expect(html).toContain('Review new client inquiries and project proposals');
     expect(html).toContain('Accept destination:');
     expect(html).toContain('Workspace A');
+    expect(html).toMatch(/class="pm-inquiries__queue-actions".*aria-label="Refresh inquiries"/);
+    expect(html.match(/aria-label="Refresh inquiries"/g)).toHaveLength(1);
   });
 
   it('shows an accepted proposal with the project it became and a link to open it', () => {
