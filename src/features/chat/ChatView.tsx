@@ -91,6 +91,7 @@ import { LiveChangesView } from './LiveChangesView';
 import { buildActivityAnchors } from './buildActivityAnchor';
 import { ChatBuildWizard, buildRefusalFrom, planningFailureReason, type BuildPlanningFailure, type BuildRefusal, type PlanCorrection } from './ChatBuildWizard';
 import { BuildNextStepCard } from './BuildNextStepCard';
+import { ChangedFilesCard, type ChangedFile } from './ChangedFilesCard';
 import { buildHandoffs, buildStatusLabel, needsSecurityAuditPlan, useProjectLiveBuild } from './useProjectLiveBuild';
 import { OrchestrationRecoveryPanel } from './OrchestrationRecoveryPanel';
 import { OrchestrationDeliveryPanel } from './OrchestrationDeliveryPanel';
@@ -227,7 +228,7 @@ function OrchestratorBuildActivityRow({
   /** Whether this person may approve the finished build from its next-step card. */
   canApprove?: boolean;
   /** Put a change request in the message box. */
-  onAskChanges?: () => void;
+  onAskChanges?: (prefill?: string) => void;
   /** After a button approval, so the rest of the chat catches up. */
   onApproved?: () => void | Promise<void>;
   /** Open this build's code changes in the side panel. */
@@ -357,6 +358,7 @@ function OrchestratorBuildActivityRow({
   const planStage = status === 'planning' || status === 'awaiting_plan_approval';
   // The plan file and the latest raw log lines, one click away behind "Technical details".
   const technicalDetails = orchestration && <>
+    <button type="button" onClick={onOpenReview} className="text-xs text-link hover:underline">Open the full build report</button>
     <OrchestrationPlanPreview projectId={projectId} runId={runId} planVersion={orchestration.run.planVersion} autoShow={false} />
     {activity.length > 0 && <ol aria-label="Recent log" className="space-y-2 border-l border-divider pl-3">{activity.map(item => <li key={`${item.id}-${item.agentName}`} className="text-[11px] leading-4 text-content-secondary">
       <div className="flex flex-wrap items-center gap-x-1.5 text-content-muted"><span className="text-content-secondary">{item.agentName}</span><span>·</span><span>{item.toolName ?? item.kind.replace(/_/g, ' ')}</span><time>{new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time></div>
@@ -402,7 +404,7 @@ function OrchestratorBuildActivityRow({
     </div>
     <ChangedFilesCard files={shownFiles} onView={onViewChanges} />
     {orchestration && orchestration.run.id === runId && <BuildNextStepCard projectId={projectId} orchestration={orchestration} canApprove={canApprove}
-      onReview={onOpenReview} onAskChanges={onAskChanges ?? onOpenReview}
+      onReview={onViewChanges} onAskChanges={onAskChanges ?? onViewChanges}
       onApproved={async () => { await refreshAfterRecovery(); await onApproved?.(); }} />}
   </>;
 }
@@ -414,47 +416,12 @@ function VerificationResult({ exitCode, signal }: { exitCode: number | null; sig
   return <span className="text-status-danger">failed (exit {exitCode})</span>;
 }
 
-type ChangedFile = { path: string; additions?: number; deletions?: number };
 
 /** Files the agents in one chat turn reported editing. */
 function turnChangedFiles(calls: AgentCall[]): ChangedFile[] {
   return [...new Set(calls.flatMap(call => call.activities
     .filter(activity => activity.kind === 'file_change')
     .flatMap(activity => activity.paths ?? [])))].map(path => ({ path }));
-}
-
-/**
- * What an AI reply changed, shown in the conversation right under that reply:
- * "Edited <file> +12 −3" with a way to open the diff. It replaces the bar that
- * used to sit above the message box.
- */
-function ChangedFilesCard({ files, onView }: { files: ChangedFile[]; onView?: () => void }) {
-  const [open, setOpen] = useState(false);
-  if (!files.length) return null;
-  const counted = files.every(file => typeof file.additions === 'number' && typeof file.deletions === 'number');
-  const added = files.reduce((sum, file) => sum + (file.additions ?? 0), 0);
-  const removed = files.reduce((sum, file) => sum + (file.deletions ?? 0), 0);
-  const name = (path: string) => path.split('/').pop() || path;
-  return <div className="mt-2 overflow-hidden rounded-xl border border-divider bg-surface-raised/75 text-left">
-    <div className="flex items-center gap-3 px-3 py-2.5">
-      <span aria-hidden="true" className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-well text-content-secondary"><FileDiff className="h-4 w-4" /></span>
-      <button type="button" aria-expanded={open} onClick={() => setOpen(value => !value)} className="min-w-0 flex-1 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
-        <span className="block truncate text-xs font-semibold text-content">Edited {files.length === 1 ? name(files[0].path) : files.length + ' files'}</span>
-        <span className="flex items-center gap-1.5 text-[11px]">
-          {counted && <><span className="font-mono text-status-success">+{added}</span><span className="font-mono text-status-danger">−{removed}</span></>}
-          <span className="truncate text-content-muted">{files.length > 1 ? files.slice(0, 3).map(file => name(file.path)).join(', ') + (files.length > 3 ? ' …' : '') : files[0].path}</span>
-        </span>
-      </button>
-      {files.length > 1 && <button type="button" onClick={() => setOpen(value => !value)} aria-label={open ? 'Hide changed files' : 'Show changed files'} className="shrink-0 rounded-lg p-1 text-content-muted hover:bg-surface-high hover:text-content">{open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}</button>}
-      {onView && <button type="button" onClick={onView} className="shrink-0 rounded-lg border border-divider bg-surface-raised px-2.5 py-1 text-[11px] font-medium text-content hover:bg-surface-high">View changes</button>}
-    </div>
-    {open && <ul className="space-y-1 border-t border-divider px-3 py-2">
-      {files.map(file => <li key={file.path} className="flex items-center justify-between gap-3 font-mono text-[10px]">
-        <span className="min-w-0 truncate text-content-secondary">{file.path}</span>
-        {counted && <span className="shrink-0"><span className="text-status-success">+{file.additions}</span> <span className="text-status-danger">−{file.deletions}</span></span>}
-      </li>)}
-    </ul>}
-  </div>;
 }
 
 function formatFileSize(bytes: number): string {
@@ -1888,7 +1855,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
     switch (tab.kind) {
       case 'preview': return { id: tab.id, title: 'Web preview', icon: <Globe className="h-3.5 w-3.5" />, live: previews.record?.state === 'starting' };
       case 'plan': return { id: tab.id, title: planFileName(tab.planVersion), icon: <FileText className="h-3.5 w-3.5" /> };
-      case 'changes': return { id: tab.id, title: 'Code changes', icon: <Code2 className="h-3.5 w-3.5" />, live: Boolean(liveBuild?.running && liveBuild.runId === tab.runId) };
+      case 'changes': return { id: tab.id, title: 'Changes', icon: <Code2 className="h-3.5 w-3.5" />, live: Boolean(liveBuild?.running && liveBuild.runId === tab.runId) };
       case 'review': return { id: tab.id, title: 'Build review', icon: <ShieldCheck className="h-3.5 w-3.5" />, live: Boolean(liveBuild?.running && liveBuild.runId === tab.runId) };
       case 'agent': {
         const agent = latestBuild?.agents.find(item => item.agentId === tab.agentId);
@@ -1926,10 +1893,10 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
     }
   };
 
-  /** The panel only shows; decisions are made in the chat. With a build and no tab open, it shows the build's review. */
+  /** The panel only shows; decisions are made in the chat. With a build and no tab open, it shows the build's changes. */
   const sidePanelBody = (): React.ReactNode => {
     if (activeSideTab) return renderSideTab(activeSideTab);
-    if (latestBuild && project) return renderSideTab({ id: 'review:' + latestBuild.runId, kind: 'review', projectId: project.id, runId: latestBuild.runId });
+    if (latestBuild && project) return renderSideTab({ id: 'changes:' + latestBuild.runId, kind: 'changes', projectId: project.id, runId: latestBuild.runId });
     return <section className="p-5"><p className="text-xs text-content-secondary">Plans, progress and changes appear here during a build.</p></section>;
   };
 
@@ -2020,7 +1987,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
       onViewChanges={() => openSideTab({ id: 'changes:' + runId, kind: 'changes', projectId, runId })}
       onWithdraw={canRouteBuild && message.id.endsWith('-build') ? () => void routeChatMessage(requestId, 'answer') : undefined}
       withdrawing={routingMessageId === requestId}
-      canApprove={can('publish_build')} onAskChanges={() => replyInComposer('Please change: ')} onApproved={refreshLiveBuild}
+      canApprove={can('publish_build')} onAskChanges={prefill => replyInComposer(prefill ?? 'Please change: ')} onApproved={refreshLiveBuild}
       usageEntries={(usage.snapshot?.entries ?? []).filter(entry => entry.orchestrationRunId === runId)} now={usage.now} names={usageNames} />;
   };
 
@@ -2096,6 +2063,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
             {!isClient && <>
               <Button variant="ghost" size="icon" aria-label={summaryOpen ? 'Hide project summary' : 'Show project summary'} aria-expanded={summaryOpen} aria-controls={projectSummaryId} title="Project summary" onClick={() => setSummaryOpen(value => !value)} className={`rounded-lg ${summaryOpen ? 'bg-surface-high text-content' : ''}`}><ListChecks className="h-4 w-4" /></Button>
               <span className="h-6 w-px bg-divider" />
+              {latestBuild && project && <button type="button" onClick={() => openSideTab({ id: 'changes:' + latestBuild.runId, kind: 'changes', projectId: project.id, runId: latestBuild.runId })} className="rounded-lg px-2 py-1 text-xs text-content-secondary hover:bg-surface-high hover:text-content">Changes</button>}
               <Button id="chat-panel-toggle" variant="ghost" size="icon" aria-label={panelVisible ? 'Hide open tabs' : 'Show open tabs'} aria-expanded={Boolean(panelVisible)} aria-controls="chat-side-panel" title="Open tabs" onClick={toggleSidePanel} className="rounded-lg"><PanelRight className="h-4 w-4" /></Button>
             </>}
           </header>
