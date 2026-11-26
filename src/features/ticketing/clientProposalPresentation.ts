@@ -15,12 +15,15 @@ export interface ClientProposalView {
  * links to it only when that project is in the client's own project list, so the link
  * always opens something they can see.
  */
-export function clientProposalView(proposal: Pick<ClientProjectProposal, 'status' | 'project'>, projects: readonly ClientProject[]): ClientProposalView {
+export function clientProposalView(proposal: Pick<ClientProjectProposal, 'status' | 'project' | 'clarificationMessages'>, projects: readonly ClientProject[]): ClientProposalView {
   switch (proposal.status) {
     case 'awaiting_client':
-      return { badge: 'Needs your reply', tone: 'pending', next: 'The project manager needs a little more information to review this proposal.', project: null };
+      return { badge: 'Your reply is needed', tone: 'pending', next: 'Your project manager has a question. Reply below so they can review your idea.', project: null };
     case 'pending':
-      return { badge: 'With the project manager', tone: 'pending', next: 'The project manager will review this proposal and update you here.', project: null };
+      return { badge: 'Waiting for project manager', tone: 'pending', project: null,
+        next: proposal.clarificationMessages?.at(-1)?.author === 'client'
+          ? 'Your project manager will review your reply and update you here.'
+          : 'Your project manager is reviewing your idea.' };
     case 'declined':
       return { badge: 'Not moving forward', tone: 'declined', next: 'The project manager decided not to move forward. No project was created.', project: null };
     case 'accepted': {

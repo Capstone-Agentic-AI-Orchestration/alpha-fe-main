@@ -45,7 +45,7 @@ function fail(message: string): never {
   throw Object.assign(new Error(message), { status: 409 });
 }
 
-const START_ACTION: StageNextAction = { who: 'pm', kind: 'start_development', label: 'Start development once the contract is signed' };
+const START_ACTION: StageNextAction = { who: 'pm', kind: 'start_development', label: 'Start development after signing in person' };
 
 function developmentAction(): StageNextAction {
   const round = activeRound();

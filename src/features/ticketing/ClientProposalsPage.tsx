@@ -144,8 +144,8 @@ function ProposalDetail({ api, proposal, projects, inspectionOnly, onBack, onRep
     {view.project && <button type="button" className="cx-button is-primary client-proposal-open-project" onClick={() => onOpenProject(view.project!)}>
       View project <ArrowRight size={14} aria-hidden="true" />
     </button>}
-    <section className="client-proposal-section" aria-label="What you asked for">
-      <h3>What you asked for</h3>
+    <section className="client-proposal-section" aria-labelledby={`proposal-${proposal.id}-description`}>
+      <h3 id={`proposal-${proposal.id}-description`}>{proposal.status === 'pending' || proposal.status === 'awaiting_client' ? 'Discovery' : 'What you asked for'}</h3>
       <p className="client-proposal-description">{proposal.description}</p>
     </section>
     {(messages.length > 0 || proposal.status === 'awaiting_client') && <section className="client-proposal-section" aria-label="Conversation with the project manager">

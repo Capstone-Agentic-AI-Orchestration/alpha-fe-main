@@ -40,7 +40,8 @@ export function PmInquiriesPage() {
 
   // Starting a project: the inquiry being turned into one, and one operation per inquiry so a retry finishes the job.
   const [startFor, setStartFor] = useState<PmCentralIntakeItem | null>(null);
-  const startOperations = useRef(new Map<string, string>());
+  const [discoverySummary, setDiscoverySummary] = useState('');
+  const startOperations = useRef(new Map<string, { operationId: string; summary?: string }>());
   const started = useRef<PmIntakeProjectStart | null>(null);
 
   // Whether starting a project from a public inquiry also invites its sender to the client portal.
@@ -65,12 +66,15 @@ export function PmInquiriesPage() {
   const createFromInquiry = async (input: NewProjectInput): Promise<Project> => {
     const item = startFor;
     if (!item) throw new Error('This inquiry is no longer selected.');
+    const summary = item.kind === 'project_proposal' ? discoverySummary.trim() : undefined;
+    if (summary === '') throw new Error('Add a discovery summary before starting this project.');
     const invite = item.kind !== 'project_proposal' && inviteClient;
-    let operationId = startOperations.current.get(item.id);
-    if (!operationId) { operationId = crypto.randomUUID(); startOperations.current.set(item.id, operationId); }
+    const pending = startOperations.current.get(item.id);
+    const operationId = pending?.operationId ?? crypto.randomUUID();
+    if (!pending) startOperations.current.set(item.id, { operationId, summary });
     const result = await pmTicketApi.startProjectFromIntake(item.id, operationId,
       { name: input.name, key: input.key, description: input.description, ...(input.targetDate ? { targetDate: input.targetDate.slice(0, 10) } : {}) },
-      item.kind === 'project_proposal' || invite);
+      item.kind === 'project_proposal' || invite, summary);
     startOperations.current.delete(item.id);
     started.current = result;
     invited.current = invite ? await sendInvite(result.ticketId) : null;
@@ -107,7 +111,13 @@ export function PmInquiriesPage() {
         workspaceCanReview={activeWorkspace?.role === 'pm'}
         initialSelection={initialSelection}
         projects={projects}
-        onStartNewProject={item => { started.current = null; invited.current = null; setInviteClient(true); setStartFor(item); }}
+        onStartNewProject={item => {
+          started.current = null;
+          invited.current = null;
+          setInviteClient(true);
+          setDiscoverySummary(startOperations.current.get(item.id)?.summary ?? '');
+          setStartFor(item);
+        }}
         onProjectStarted={(result, item, invite) => {
           if (!invite) { announce(result, item); return; }
           void sendInvite(result.ticketId).then(invitation => { announce(result, item, invitation); setRefreshToken(value => value + 1); });
@@ -129,9 +139,12 @@ export function PmInquiriesPage() {
         ? 'Alpha creates the project, opens the request and lets this client see it. Set up repositories next.'
         : 'Alpha creates the project and opens the request. Set up repositories next.'}
       submitLabel="Start project"
-      extraFields={startFor && startFor.kind !== 'project_proposal'
-        ? <InviteClientOption email={startFor.email} checked={inviteClient} onChange={setInviteClient} />
-        : undefined}
+      extraFields={startFor?.kind === 'project_proposal' ? <label className="block space-y-2">
+        <span className="block text-xs font-medium text-content-secondary">Discovery summary <span className="text-link">*</span></span>
+        <span className="block text-xs text-content-muted">Visible to the client. Summarize the goal, who it serves, key constraints, and the next step.</span>
+        <textarea required rows={4} maxLength={1500} value={discoverySummary} onChange={event => setDiscoverySummary(event.target.value)}
+          className="w-full rounded-xl border border-divider bg-surface px-3.5 py-2.5 text-sm text-content outline-none focus-visible:ring-2 focus-visible:ring-link" />
+      </label> : startFor && <InviteClientOption email={startFor.email} checked={inviteClient} onChange={setInviteClient} />}
       create={createFromInquiry}
       onClose={() => {
         // Closing after the project was made still counts: say so, and show the inquiry as handled.

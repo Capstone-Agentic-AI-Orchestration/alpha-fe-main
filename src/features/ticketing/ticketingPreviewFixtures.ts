@@ -1,5 +1,5 @@
 import { createTicketPreview, type PreviewSeedTicket } from './previewModel';
-import { PREVIEW_CONVERSATION_ITEMS, PREVIEW_CONVERSATION_PROJECT, PREVIEW_CONVERSATION_REQUESTS } from './conversationPreviewFixtures';
+import { PREVIEW_CONVERSATION_ITEMS, PREVIEW_CONVERSATION_PROJECT, PREVIEW_CONVERSATION_REQUESTS, PREVIEW_DISCOVERY_PROPOSAL, PREVIEW_DISCOVERY_SUMMARIES } from './conversationPreviewFixtures';
 import { previewDelay, withPreviewLatency } from './previewLatency';
 import type { TicketDocumentsReadApi } from './ticketDocuments';
 import { previewStage, previewStageEvents, previewStageSummary } from './stagePreviewFixtures';
@@ -216,7 +216,8 @@ const localMethods: Partial<typeof pmTicketApi> = {
   async listClientProjectConversations() {
     return [{ ...PREVIEW_CONVERSATION_PROJECT, openRequests: 2, lastActivityAt: '2026-10-06T08:40:00+08:00' }];
   },
-  async getProjectConversation() { return { items: [...PREVIEW_CONVERSATION_ITEMS, ...previewStageEvents()], clientId: 'preview-northstar' }; },
+  async getProjectConversation() { return { items: [...PREVIEW_CONVERSATION_ITEMS, ...previewStageEvents()],
+    clientId: 'preview-northstar', discoverySummaries: PREVIEW_DISCOVERY_SUMMARIES }; },
   async getProjectStage(_projectId: string, clientId: string) { return previewStageSummary('pm', clientId); },
   async setStartingStage(_projectId: string, _clientId: string, input: { stage: 'poc' | 'development' | 'completed'; revisionsUsed?: number; revisionLimit?: number }) {
     return previewStage.setStartingStage(input);
@@ -340,6 +341,8 @@ export const pmPreviewDocumentsApi: TicketDocumentsReadApi = {
 };
 
 const DEMO_INQUIRIES: PmCentralIntakeItem[] = [
+  { ...PREVIEW_DISCOVERY_PROPOSAL, kind: 'project_proposal',
+    fullName: 'Alex Morgan', email: 'alex.morgan@example.test', company: 'Northstar Demo Co.' },
   {
     kind: 'public_inquiry',
     id: 'preview-inquiry-2041', publicReference: 'INQ-DEMO-2041',
@@ -365,7 +368,7 @@ export const pmPreviewProjects = [{ id: 'preview-project-ops', name: 'Operations
 export const pmPreviewIntakeApi = {
   async listCentralIntakes(_after: string | null = null, filter: 'pending' | 'handled' = 'pending'): Promise<PmCentralIntakePage> {
     await previewDelay();
-    return { items: DEMO_INQUIRIES.filter(item => filter === 'pending' ? item.status === 'pending' : item.status !== 'pending'), nextCursor: null };
+    return { items: DEMO_INQUIRIES.filter(item => (item.status === 'pending' || item.status === 'awaiting_client') === (filter === 'pending')), nextCursor: null };
   },
   async acceptCentralIntake(): Promise<never> {
     throw new Error('Inquiry changes are disabled in the local UI preview.');

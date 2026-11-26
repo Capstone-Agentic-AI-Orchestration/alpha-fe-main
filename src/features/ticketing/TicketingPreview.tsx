@@ -70,9 +70,10 @@ function AlphaPmPreviewShell({ onViewAsClient, onReset }: { onViewAsClient: () =
               <span>{section.label}</span><span className="h-px flex-1 bg-surface-raised" aria-hidden="true" />
             </div>
             {items.map(item => {
-              const active = item.id === previewSection;
-              const available = item.id === 'clients' || item.id === 'inquiries';
-              return <button key={item.id} type="button" disabled={!available} onClick={() => available && setPreviewSection(item.id as 'clients' | 'inquiries')} aria-current={active ? 'page' : undefined}
+              const destination = item.id === 'inbox' ? 'inquiries' : item.id;
+              const active = destination === previewSection;
+              const available = destination === 'clients' || destination === 'inquiries';
+              return <button key={item.id} type="button" disabled={!available} onClick={() => available && setPreviewSection(destination)} aria-current={active ? 'page' : undefined}
                 title={expanded ? undefined : navLabel(item.id, 'pm')}
                 className={`group relative flex w-full items-center rounded-lg transition-colors ${expanded ? 'justify-between px-3 py-2' : 'justify-center px-0 py-2.5'} ${active ? 'bg-selected font-semibold text-selected-content ring-1 ring-inset ring-content/[0.06]' : 'cursor-not-allowed text-content-muted opacity-70'}`}>
                 <span className={`flex items-center ${expanded ? 'gap-3' : 'justify-center'} ${active ? 'text-link' : 'text-content-muted'}`}>

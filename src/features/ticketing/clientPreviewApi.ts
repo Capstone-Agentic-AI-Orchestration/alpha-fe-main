@@ -1,5 +1,5 @@
 import { ClientTicketApiError, clientTicketApi } from './clientApi';
-import { PREVIEW_CONVERSATION_ITEMS, PREVIEW_CONVERSATION_REQUESTS } from './conversationPreviewFixtures';
+import { PREVIEW_CONVERSATION_ITEMS, PREVIEW_CONVERSATION_REQUESTS, PREVIEW_DISCOVERY_PROPOSAL, PREVIEW_DISCOVERY_SUMMARIES } from './conversationPreviewFixtures';
 import type {
   ClientProject, ClientProjectFeedbackMessage, ClientProjectRequestItem, ClientProjectRequestQueue,
   ClientTicketDetail, ClientTicketQueue, ClientTicketQueueOptions,
@@ -69,7 +69,7 @@ const sampleProject: ClientProject = {
 };
 
 const methods: Partial<typeof clientTicketApi> = {
-  async getProjectConversation() { return { items: [...PREVIEW_CONVERSATION_ITEMS, ...previewStageEvents()] }; },
+  async getProjectConversation() { return { items: [...PREVIEW_CONVERSATION_ITEMS, ...previewStageEvents()], discoverySummaries: PREVIEW_DISCOVERY_SUMMARIES }; },
   async getProjectStage() { return previewStageSummary('client'); },
   async saveRoundItems(_workspaceId: string, _projectId: string, roundId: string, items: string[]) { return previewStage.saveRoundItems(roundId, items); },
   async submitRound(_workspaceId: string, _projectId: string, roundId: string, input: { acknowledgeExtra: boolean }) {
@@ -90,7 +90,11 @@ const methods: Partial<typeof clientTicketApi> = {
     return { items: [{ ...sampleProject, stage: parseStageBadge({ stage: summary.stage, label: summary.stageLabel,
       waitingOn: summary.nextAction?.who ?? null, actionLabel: summary.nextAction?.label ?? null }) }] };
   },
-  async listProjectProposals() { return { items: [] }; },
+  async listProjectProposals() { return { items: [PREVIEW_DISCOVERY_PROPOSAL, {
+    id: 'preview-proposal-ops', title: sampleProject.name, description: PREVIEW_DISCOVERY_SUMMARIES[0].body,
+    requestedDeadline: null, submittedAt: '2026-10-01T08:00:00+08:00', status: 'accepted',
+    project: { workspaceId: workspace, projectId: sampleProjectId, name: sampleProject.name },
+  }] }; },
   async listRequests(options: ClientTicketQueueOptions = {}) { return requestPage(options); },
   async listProjectRequests(workspaceId: string, projectId: string, options: ClientTicketQueueOptions = {}) {
     assertWorkspace(workspaceId);

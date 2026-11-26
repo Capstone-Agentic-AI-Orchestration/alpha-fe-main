@@ -85,15 +85,14 @@ describe('stage UI', () => {
       .toContain('Revisions: 1 of 3 used');
   });
 
-  it('tells the client the project is in the POC stage, with nothing to review or approve', () => {
+  it('gives the client in-person signing guidance during proof of concept', () => {
     const props = { api: {} as never, project, busy: false, actionError: '', run: vi.fn() };
     const html = renderToStaticMarkup(<ClientStagePanel {...props} summary={summary()} />);
-    expect(html).toContain('Your project is in the proof-of-concept stage');
     for (const gone of ['Approve this POC', 'Request changes', 'Features', 'Screens and pages']) expect(html).not.toContain(gone);
-    expect(html).toContain('You sign the development contract with them in person');
+    expect(html).toContain('arrange to sign the development contract in person');
     // A project left in the old Contract stage shows the same line, with nothing to sign.
     const contract = renderToStaticMarkup(<ClientStagePanel {...props} summary={summary({ stage: 'contract', nextAction: null })} />);
-    expect(contract).toContain('Your project is in the proof-of-concept stage');
+    expect(contract).toContain('arrange to sign the development contract in person');
     expect(contract).not.toContain('Sign the contract');
   });
 
@@ -101,9 +100,9 @@ describe('stage UI', () => {
     const props = { api: {} as never, projectId: 'p', clientId: 'c', busy: false, actionError: '', run: vi.fn() };
     expect(renderToStaticMarkup(<PmStagePanel {...props} summary={summary({ stage: 'unset' })} />)).toContain('Where is this project now?');
     const poc = renderToStaticMarkup(<PmStagePanel {...props} summary={summary()} />);
-    expect(poc).toContain('This project is in the proof-of-concept stage');
+    expect(poc).toContain('Proof of concept');
     expect(poc).toContain('Start development');
-    expect(poc).toContain('signed in person');
+    expect(poc).toContain('signing the contract in person');
     expect(renderToStaticMarkup(<PmStagePanel {...props} summary={summary({ stage: 'contract' })} />)).toContain('Start development');
     for (const gone of ['New POC version', 'Write the POC', 'Summary of the proposed system', 'Add feature', 'Screens and pages', 'Not included',
       'Note to the client', 'Share with the client', 'Save draft']) expect(poc).not.toContain(gone);

@@ -23,9 +23,9 @@ describe('how an inquiry reads on the Inquiries page', () => {
   });
 
   it('words the status the same everywhere', () => {
-    expect(inquiryStatus(proposal, 'pending')).toBe('Ready for your review');
-    expect(inquiryStatus({ ...proposal, status: 'awaiting_client' }, 'pending')).toBe('Waiting for the client');
-    expect(inquiryStatus({ ...proposal, clarificationMessages: [{ id: 'm', author: 'client', body: 'Retro', createdAt: '2026-11-19T00:00:00Z' }] }, 'pending')).toBe('Client replied');
+    expect(inquiryStatus(proposal, 'pending')).toBe('Review project idea');
+    expect(inquiryStatus({ ...proposal, status: 'awaiting_client' }, 'pending')).toBe('Waiting for client reply');
+    expect(inquiryStatus({ ...proposal, clarificationMessages: [{ id: 'm', author: 'client', body: 'Retro', createdAt: '2026-11-19T00:00:00Z' }] }, 'pending')).toBe('Review client reply');
     expect(inquiryStatus(inquiry, 'pending')).toBe('New · email not verified');
     expect(inquiryStatus({ ...proposal, status: 'accepted' }, 'handled')).toBe('Accepted');
     expect(inquiryStatus({ ...proposal, status: 'declined' }, 'handled')).toBe('Declined');

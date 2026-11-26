@@ -22,9 +22,8 @@ export function ClientStagePanel(props: Readonly<ClientStagePanelProps>) {
   const { summary } = props;
   return <div className="ps-panel">
     {summary.stage === 'unset' && <p className="ps-note">The project manager will set this project’s stage. Until then, keep using the conversation as usual.</p>}
-    {/* 'contract' is the old in-app contract stage; the contract is now signed in person, so it reads as the end of the POC. */}
-    {(summary.stage === 'poc' || summary.stage === 'contract') && <p className="ps-lead">Your project is in the proof-of-concept stage.
-      Talk the idea through with your project manager here. You sign the development contract with them in person, then development starts.</p>}
+    {(summary.stage === 'poc' || summary.stage === 'contract') && <p className="ps-lead">
+      Discuss any open questions here and arrange to sign the development contract in person with your project manager.</p>}
     {summary.stage === 'development' && <ClientDevelopmentStage {...props} />}
     {summary.stage === 'completed' && <ClientCompletedStage summary={summary} />}
     {(summary.stage === 'development' || summary.stage === 'completed') && <ClientRequests {...props} />}

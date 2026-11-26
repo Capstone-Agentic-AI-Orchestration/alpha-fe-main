@@ -147,11 +147,11 @@ describe('real ticketing interfaces in the Alpha app', () => {
     const html = proposalsPage(null);
     expect(html).toContain('Propose a project');
     for (const title of ['Customer dashboard', 'Client portal refresh', 'Archived data export']) expect(html).toContain(title);
-    expect(html).toContain('With the project manager');
+    expect(html).toContain('Waiting for project manager');
     expect(html).toContain('Not moving forward');
     // Waiting on the client sorts first and is the one shown.
     expect(html.indexOf('Customer dashboard')).toBeLessThan(html.indexOf('Client portal refresh'));
-    expect(html).toContain('The project manager needs a little more information to review this proposal.');
+    expect(html).toContain('Your project manager has a question.');
     expect(html).toContain('Which customer group should we support first?');
     expect(html).toContain('Your reply');
     expect(html).toContain('Send reply');

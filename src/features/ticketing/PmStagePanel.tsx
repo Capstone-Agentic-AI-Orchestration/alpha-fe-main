@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Modal } from '@/shared/components/Modal';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import type { pmTicketApi } from './pmApi';
@@ -23,11 +24,15 @@ export interface PmStagePanelProps {
 }
 
 /** The PM's side of the project's stage: what to prepare, publish or decide next. */
-export function PmStagePanel(props: Readonly<PmStagePanelProps>) {
+export function PmStagePanel(props: Readonly<PmStagePanelProps & { startInHeader?: boolean }>) {
   const { summary } = props;
   return <div className="space-y-5 text-[13px]">
     {summary.stage === 'unset' && <StartingStagePicker {...props} />}
-    {(summary.stage === 'poc' || summary.stage === 'contract') && <PmBeforeDevelopment {...props} />}
+    {(summary.stage === 'poc' || summary.stage === 'contract') && <section className="space-y-3">
+      <h3 className="text-[13px] font-semibold text-content">Proof of concept</h3>
+      <p className="text-content-muted">Share the concept or test results in the conversation. Start development after signing the contract in person.</p>
+      {!props.startInHeader && <PmStartDevelopment {...props} />}
+    </section>}
     {(summary.stage === 'development' || summary.stage === 'completed') && <PmRequests {...props} />}
     {summary.stage === 'development' && <PmDevelopmentStage {...props} />}
     {summary.stage === 'completed' && <p className="text-content-secondary">{summary.final?.acceptedName
@@ -53,7 +58,7 @@ function StartingStagePicker({ api, projectId, clientId, busy, run }: Readonly<P
     </div>
     <fieldset className="space-y-2">
       <legend className="sr-only">Current stage</legend>
-      {([['poc', 'Proof of concept', 'Still agreeing on what to build'], ['development', 'Development', 'The contract is signed and work is under way'],
+      {([['poc', 'Proof of concept', 'Confirming the approach or arranging signing'], ['development', 'Development', 'The contract is signed and work is under way'],
         ['completed', 'Completed', 'Delivered and accepted; new work costs additional']] as const).map(([value, title, hint]) =>
         <label key={value} className="flex cursor-pointer items-start gap-2.5">
           <input type="radio" name="starting-stage" value={value} checked={stage === value} onChange={() => setStage(value)} className="mt-1" />
@@ -72,14 +77,8 @@ function StartingStagePicker({ api, projectId, clientId, busy, run }: Readonly<P
 
 const rounds = (value: string) => Math.max(0, Math.min(20, Math.trunc(Number(value)) || 0));
 
-/**
- * The POC stage is a marker: nothing is written here, and the features live as
- * tasks on the project's board. The development contract is drafted and signed
- * in person; once it is, the PM starts development and enters the revision
- * rounds it includes. A project left in the old in-app Contract stage is shown
- * the same way.
- */
-function PmBeforeDevelopment({ api, projectId, clientId, summary, busy, run }: Readonly<PmStagePanelProps>) {
+/** Confirm the offline signing and record the revision allowance together. */
+export function PmStartDevelopment({ api, projectId, clientId, summary, busy, actionError, run }: Readonly<PmStagePanelProps>) {
   const [confirming, setConfirming] = useState(false);
   const [limit, setLimit] = useState(summary.revisionLimit);
   const start = async () => {
@@ -87,25 +86,25 @@ function PmBeforeDevelopment({ api, projectId, clientId, summary, busy, run }: R
       'Development was not started. Try again.');
     if (done) setConfirming(false);
   };
-  return <section className="space-y-3">
-    <div>
-      <h3 className="text-[13px] font-semibold text-content">Proof of concept</h3>
-      <p className="mt-1 text-content-muted">This project is in the proof-of-concept stage. The client sees it in their conversation.
-        Agree the concept with them here; the features are tracked as tasks on the board. The development contract is signed in person.</p>
-    </div>
-    {confirming
-      ? <div className="space-y-3">
-        <p className="text-content-secondary">Start development? Do this once the contract is signed in person. The client sees the change.</p>
+  const close = () => { if (!busy) setConfirming(false); };
+  return <>
+    <Button type="button" size="sm" disabled={busy} aria-haspopup="dialog"
+      onClick={() => { setLimit(summary.revisionLimit); setConfirming(true); }}>Start development</Button>
+    <Modal isOpen={confirming} onClose={close} title="Start development" maxWidth="max-w-md"
+      subtitle="Confirm only once you and the client have signed the contract in person."
+      footer={<div className="flex justify-end gap-2">
+        <Button type="button" variant="ghost" disabled={busy} onClick={close}>Cancel</Button>
+        <Button type="button" disabled={busy} onClick={() => void start()}>Confirm and start</Button>
+      </div>}>
+      <div className="space-y-3">
         <label className="block space-y-1"><span className={label}>Revision rounds included in the contract</span>
-          <Input type="number" min={0} max={20} value={limit} onChange={event => setLimit(rounds(event.target.value))} className="h-8 w-24" /></label>
-        <p className="text-[12px] text-content-muted">Feedback rounds past this number cost the client additional.</p>
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" size="sm" disabled={busy} onClick={() => void start()}>Start development</Button>
-          <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => setConfirming(false)}>Cancel</Button>
-        </div>
+          <Input type="number" min={0} max={20} value={limit} disabled={busy}
+            onChange={event => setLimit(rounds(event.target.value))} className="h-8 w-24" /></label>
+        <p className="text-xs text-content-muted">Feedback rounds beyond this number may cost extra.</p>
+        {actionError && <p role="alert" className="text-xs text-status-danger">{actionError}</p>}
       </div>
-      : <Button type="button" size="sm" disabled={busy} onClick={() => setConfirming(true)}>Start development</Button>}
-  </section>;
+    </Modal>
+  </>;
 }
 
 function SignedContractLine({ contract }: Readonly<{ contract: Contract }>) {
