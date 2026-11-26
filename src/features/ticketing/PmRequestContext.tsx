@@ -139,12 +139,12 @@ export function PmSelectedTicket({ api = pmTicketApi, documentsApi, request, cli
       <button type="button" className="text-link underline" onClick={onChanged}>Retry</button>
     </p>}
     {!detail && !error && <p role="status" className="pm-rail-note">Loading ticket…</p>}
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 empty:hidden">
+      {actions}
+      {inFlight && onOpenWorkflow && <button type="button" className="text-xs font-semibold text-link hover:underline"
+        onClick={onOpenWorkflow}>Open request workflow</button>}
+    </div>
     {detail && <>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 empty:hidden">
-        {actions}
-        {inFlight && onOpenWorkflow && <button type="button" className="text-xs font-semibold text-link hover:underline"
-          onClick={onOpenWorkflow}>Open request workflow</button>}
-      </div>
       <div>
         <PmCollapsibleRailCard nested id="selected-ticket-details" icon={<Info size={16} />} title="Request details">
           <p className="mb-4 whitespace-pre-wrap text-[13px] leading-relaxed text-content">{detail.description}</p>
