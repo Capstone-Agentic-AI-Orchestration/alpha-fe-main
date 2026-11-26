@@ -534,7 +534,9 @@ span.cx-button { pointer-events: none; }
 
 /* One project frame for both views: the header (with its Conversation | Preview switch) tops the main area,
    the rail stays on the right. In the preview view the rail holds the same conversation, beside a Requests tab. */
-.cx-reqchat-head > .cx-back { align-self: center; min-height: 36px; margin: 0; white-space: nowrap; }
+.cx-reqchat-head > .cx-project-back { border: 1px solid var(--cx-line); background: var(--cx-surface); color: var(--cx-ink); }
+.cx-reqchat-head > .cx-project-back:hover:not(:disabled) { background: var(--cx-raised); }
+.cx-reqchat-head > .cx-project-back:focus-visible { outline: 2px solid var(--cx-accent); outline-offset: 2px; }
 .cx-reqchat-head > .cx-reqchat-controls { display: flex; flex: none; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--client-space-2); margin-left: auto; }
 .cx-viewswitch { display: inline-flex; padding: 3px; border: 1px solid var(--cx-line); border-radius: var(--cx-radius); background: var(--cx-surface); }
 .cx-viewswitch button { display: inline-flex; min-height: 34px; align-items: center; gap: var(--client-space-2); padding: 0 var(--client-space-3); border: 0; border-radius: var(--client-radius-control); background: none; color: var(--cx-muted); font-size: var(--client-type-caption); font-weight: var(--client-weight-medium); cursor: pointer; transition: background-color .16s ease, color .16s ease; }

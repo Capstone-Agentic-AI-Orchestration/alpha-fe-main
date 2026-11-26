@@ -28,7 +28,8 @@ describe('client project page', () => {
     const rail = html.indexOf('aria-label="Requests and details for Resort Website"');
     expect(chat).toBeGreaterThan(-1);
     expect(rail).toBeGreaterThan(chat);
-    expect(html).toContain('All projects');
+    expect(html).toContain('aria-label="Back to all projects"');
+    expect(html).not.toContain('>All projects<');
     expect(html.slice(rail)).toContain('class="cx-project-ticket-list" aria-label="Requests"');
     expect(html).toContain('Pick a request to see its status');
     // The project header owns the New request action when it is provided.

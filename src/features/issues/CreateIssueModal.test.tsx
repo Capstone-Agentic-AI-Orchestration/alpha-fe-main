@@ -59,13 +59,14 @@ describe('New task dialog', () => {
     expect(render()).not.toContain('Client request');
   });
 
-  it('opened from a request, shows its project and request instead of asking for them', () => {
+  it('locks the conversation project and makes only the suggested request editable', () => {
     projects = [{ id: 'p1', name: 'Website refresh', key: 'WEB' }, { id: 'p2', name: 'Resort site', key: 'RES' }];
     expect(render()).toContain('Project</span>');
+    const request = { ticketId: 't-1', reference: 'TKT-28EC59', title: 'Add a contact form' };
     sessionValues = {
       'issueModal.project': 'p1',
       'issueModal.projectLocked': true,
-      'issueModal.linkedRequest': { ticketId: 't-1', reference: 'TKT-28EC59', title: 'Add a contact form', source: 'conversation' }
+      'issueModal.linkedRequest': { ...request, source: 'conversation' }
     };
     const html = render();
     expect(html).toContain('In Website refresh');
@@ -73,6 +74,11 @@ describe('New task dialog', () => {
     expect(html).toContain('Add a contact form');
     expect(html).not.toContain('Project</span>');
     expect(html).not.toContain('Not for a client request');
+    sessionValues['issueModal.linkedRequest'] = { ...request, source: 'task_dialog' };
+    const editable = render();
+    expect(editable).toContain('In Website refresh');
+    expect(editable).toContain('Not for a client request');
+    expect(editable).toContain('<option value="t-1" selected="">Add a contact form</option>');
     sessionValues = {};
     projects = [{ id: 'p1', name: 'Website refresh', key: 'WEB' }];
   });

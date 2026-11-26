@@ -341,8 +341,9 @@ function ConversationHead({ project, onBack, busy, requestAction, controls }: Re
   project: ClientProject; onBack: () => void; busy: boolean; requestAction?: ReactNode; controls?: ReactNode;
 }>) {
   return <header className="cx-reqchat-head">
-    <button type="button" className="cx-back" onClick={onBack} disabled={busy}>
-      <ArrowLeft size={15} aria-hidden="true" /><span>All projects</span>
+    <button type="button" className="cx-icon-button cx-project-back" aria-label="Back to all projects" title="Back to all projects"
+      onClick={onBack} disabled={busy}>
+      <ArrowLeft size={18} aria-hidden="true" />
     </button>
     <div className="cx-project-head-copy">
       <h1 id="client-conversation-project-title">{project.name}</h1>
