@@ -106,6 +106,8 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
   const selected = items.find(item => item.id === selectedId) ?? null;
   const selectedClarificationMessages = selected?.clarificationMessages ?? [];
   const selectedContact = selected ? inquiryContact(selected) : null;
+  const proposalHeading = filter === 'pending' ? 'Discovery' : 'What the client wants';
+  const descriptionHeading = selected?.kind === 'project_proposal' ? proposalHeading : 'What they need';
   /** Which one thing the decision area shows for a pending inquiry. */
   const decisionMode = ((): 'waiting' | 'ask' | 'decline' | 'existing' | 'choose' => {
     const proposal = selected?.kind === 'project_proposal';
@@ -424,8 +426,8 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
               {selected.company && <li><UserRound size={13} aria-hidden="true" />{selected.company}</li>}
               <li><CalendarDays size={13} aria-hidden="true" />{selected.requestedDeadline ? `Target ${selected.requestedDeadline}` : 'No target date'}</li>
             </ul>
-            <section className="pm-inquiries__section" aria-label={selected.kind === 'project_proposal' ? 'What the client wants' : 'What they need'}>
-              <h3>{selected.kind === 'project_proposal' ? 'What the client wants' : 'What they need'}</h3>
+            <section className="pm-inquiries__section" aria-label={descriptionHeading}>
+              <h3>{descriptionHeading}</h3>
               <p className="pm-inquiries__description">{selected.description}</p>
             </section>
             {selected.kind === 'project_proposal' && selectedClarificationMessages.length > 0 && <section className="pm-inquiries__section" aria-label="Conversation with the client">

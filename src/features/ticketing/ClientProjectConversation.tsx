@@ -6,10 +6,12 @@ import { ClientTicketApiError, clientTicketApi, type ClientProject, type ClientT
 import { ClientRequestProgress, ClientRequestRail, CollapsibleRailCard, type ClientRequestRailProps } from './ClientTicketDetail';
 import { ProjectPreviewFrame } from './ClientProjectPreview';
 import { ConversationTicketPicker, ProjectConversationChat, openRequestCount, useConversationJump, type ConversationAbout } from './ProjectConversationView';
-import { withUpdatedRequest, type ConversationItem, type ConversationRequest, type RequestChecklistStatus } from './projectConversation';
+import { withUpdatedRequest, type ConversationRequest, type ProjectConversationTimeline, type RequestChecklistStatus } from './projectConversation';
 import type { ClientProjectView } from './clientWorkspaceTabs';
 import { useProjectStage } from './useProjectStage';
 import { ClientStagePanel } from './ClientStagePanel';
+import { ProjectStageTracker } from './ProjectStageTracker';
+import { ProjectDiscoverySummaries } from './ProjectDiscoverySummaries';
 
 const REFRESH_MS = 30_000;
 const TERMINAL = new Set(['closed', 'declined', 'cancelled']);
@@ -19,7 +21,7 @@ const PREVIEW_QUESTION = 'Is there a preview I can try yet?';
 
 /** The project's one conversation and its requests, refreshed every 30 seconds while the page is visible. */
 function useClientProjectConversation(api: typeof clientTicketApi, project: ClientProject) {
-  const [items, setItems] = useState<ConversationItem[] | null>(null);
+  const [timeline, setTimeline] = useState<ProjectConversationTimeline | null>(null);
   const [requests, setRequests] = useState<ConversationRequest[] | null>(null);
   const [error, setError] = useState('');
   const token = useRef(0);
@@ -27,11 +29,11 @@ function useClientProjectConversation(api: typeof clientTicketApi, project: Clie
   const load = useCallback(async (quiet = false) => {
     token.current += 1;
     const current = token.current;
-    if (!quiet) { setItems(null); setRequests(null); setError(''); }
+    if (!quiet) { setTimeline(null); setRequests(null); setError(''); }
     try {
       const [timeline, list] = await Promise.all([api.getProjectConversation(workspaceId, projectId), api.getProjectConversationRequests(workspaceId, projectId)]);
       if (current !== token.current) return;
-      setItems(timeline.items); setRequests(list.items); setError('');
+      setTimeline(timeline); setRequests(list.items); setError('');
     } catch (error_) {
       if (current !== token.current || quiet) return;
       // A request never falls back to a chat of its own; the project's one conversation says what went wrong.
@@ -45,7 +47,7 @@ function useClientProjectConversation(api: typeof clientTicketApi, project: Clie
     const timer = window.setInterval(() => { if (document.visibilityState === 'visible') void load(true); }, REFRESH_MS);
     return () => window.clearInterval(timer);
   }, [load]);
-  return { items, requests, setRequests, error, load };
+  return { items: timeline?.items ?? null, discoverySummaries: timeline?.discoverySummaries, requests, setRequests, error, load };
 }
 
 /** What the client does in the conversation itself: send messages and tick requests done. */
@@ -207,11 +209,18 @@ export function ClientProjectConversation(props: Readonly<ClientProjectConversat
     // A second frame lets the conversation come back first when it was folded away.
     window.requestAnimationFrame(() => window.requestAnimationFrame(() => document.getElementById(inputId)?.focus()));
   };
-  const head = <ConversationHead project={project} onBack={props.onBack} busy={busy} requestAction={props.requestAction}
+  const inProofOfConcept = stageSummary?.stage === 'poc' || stageSummary?.stage === 'contract';
+  const head = <><ConversationHead project={project} onBack={props.onBack} busy={busy} requestAction={props.requestAction}
     controls={changeView && <>
       <ViewSwitch mode={mode} onChange={next => changeProjectView(next === 'preview' ? 'preview' : 'conversation')} />
       {mode === 'preview' && shared && <FocusToggle focused={focused} onChange={next => changeProjectView(next ? 'focus' : 'preview')} />}
-    </>} />;
+    </>} />
+    {stageSummary && <div className="shrink-0 border-b border-divider px-4 pb-2 sm:px-6">
+      <ProjectStageTracker summary={stageSummary} role="client" nextActionControl={inProofOfConcept
+        ? <span>Arrange in-person signing with your project manager.</span> : undefined} />
+    </div>}
+    <ProjectDiscoverySummaries summaries={conversation.discoverySummaries} />
+  </>;
   const chat = <ProjectConversationChat role="client"
     items={conversation.items} requests={conversation.requests} error={conversation.error} actionError={actions.actionError}
     clientName={clientName} clientInitial={clientName.trim()[0]?.toUpperCase() ?? 'C'} draft={draft} onDraftChange={setDraft}

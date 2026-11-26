@@ -8,11 +8,12 @@ import { ProjectConversationChat, ProjectConversationView, useConversationJump, 
 import { PmSelectedTicket, usePmRequestDetail } from './PmRequestContext';
 import { PmConversationRail } from './PmConversationRail';
 import type { TicketDocumentsReadApi } from './ticketDocuments';
-import { canToggleRequest, withUpdatedRequest, type ConversationItem, type ConversationRequest } from './projectConversation';
+import { canToggleRequest, withUpdatedRequest, type ConversationItem, type ConversationRequest, type ProjectConversationTimeline } from './projectConversation';
 import { REQUEST_TASK_LINKED_EVENT } from './requestTaskLink';
 import { useProjectStage } from './useProjectStage';
 import { ProjectStageTracker } from './ProjectStageTracker';
-import { PmStagePanel } from './PmStagePanel';
+import { PmStagePanel, PmStartDevelopment } from './PmStagePanel';
+import { ProjectDiscoverySummaries } from './ProjectDiscoverySummaries';
 import type { StageSummary } from './projectStages';
 
 const REFRESH_MS = 30_000;
@@ -56,7 +57,7 @@ function RequestQuestionButton({ detail, replyKind, onChange, inputId }: Readonl
  * request (to that request) or about the project as a whole.
  */
 function usePmProjectConversation(api: typeof pmTicketApi, projectId: string | null, clientId: string | null, refreshToken?: unknown) {
-  const [items, setItems] = useState<ConversationItem[] | null>(null);
+  const [timeline, setTimeline] = useState<ProjectConversationTimeline | null>(null);
   const [requests, setRequests] = useState<ConversationRequest[] | null>(null);
   const [error, setError] = useState('');
   const loadToken = useRef(0);
@@ -64,11 +65,11 @@ function usePmProjectConversation(api: typeof pmTicketApi, projectId: string | n
     if (!clientId || !projectId) return;
     loadToken.current += 1;
     const token = loadToken.current;
-    if (!quiet) { setItems(null); setRequests(null); setError(''); }
+    if (!quiet) { setTimeline(null); setRequests(null); setError(''); }
     try {
       const [timeline, list] = await Promise.all([api.getProjectConversation(projectId, clientId), api.getProjectConversationRequests(projectId, clientId)]);
       if (token !== loadToken.current) return;
-      setItems(timeline.items); setRequests(list.items); setError('');
+      setTimeline(timeline); setRequests(list.items); setError('');
     } catch (error_) {
       if (token === loadToken.current && !quiet) setError(errorText(error_, 'The conversation could not be loaded. Refresh to try again.'));
     }
@@ -94,7 +95,7 @@ function usePmProjectConversation(api: typeof pmTicketApi, projectId: string | n
     await load(true);
   }, [api, clientId, projectId, load]);
 
-  return { items, requests, setRequests, error, load, send };
+  return { items: timeline?.items ?? null, discoverySummaries: timeline?.discoverySummaries, requests, setRequests, error, load, send };
 }
 
 /** Why there is no conversation to show: no portal account yet, a load error, or no shared projects. */
@@ -171,7 +172,7 @@ export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTi
   const [contextTicketId, setContextTicketId] = useState<string | null>(focus?.ticketId ?? null);
   const [contextVersion, setContextVersion] = useState(0);
   const [replyKind, setReplyKind] = useState<PmReplyKind>('reply');
-  const { items, requests, setRequests, error, load, send } = usePmProjectConversation(api, projectId, clientId, refreshToken);
+  const { items, discoverySummaries, requests, setRequests, error, load, send } = usePmProjectConversation(api, projectId, clientId, refreshToken);
   const loadStage = useCallback(() => api.getProjectStage(projectId!, clientId!), [api, projectId, clientId]);
   const afterStageWrite = useCallback(() => { void load(true); }, [load]);
   const stage = useProjectStage(projectId && clientId && typeof api.getProjectStage === 'function' ? loadStage : null, afterStageWrite);
@@ -233,9 +234,15 @@ export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTi
   if (notice) return notice;
 
   // Keep stage and preview context below the ticket accordion.
-  const stageCard = stageSummary && projectId && clientId ? { ...stageCardText(stageSummary),
-    content: <PmStagePanel api={api} projectId={projectId} clientId={clientId} summary={stageSummary} busy={stage.busy}
-      actionError={stage.actionError} run={stage.run} /> } : null;
+  const stageProps = stageSummary && projectId && clientId ? {
+    api, projectId, clientId, summary: stageSummary, busy: stage.busy, actionError: stage.actionError, run: stage.run,
+  } : null;
+  const stageCard = stageProps ? { ...stageCardText(stageProps.summary), content: <PmStagePanel {...stageProps} startInHeader /> } : null;
+  const startDevelopment = stageProps && (stageProps.summary.stage === 'poc' || stageProps.summary.stage === 'contract')
+    ? <div className="flex flex-wrap items-center gap-2">
+        <span className="text-content-muted">After signing in person</span>
+        <PmStartDevelopment key={stageProps.projectId} {...stageProps} />
+      </div> : undefined;
   const previewShared = client.projects.find(item => item.projectId === projectId)?.previewPublished;
   const inputId = `pm-conversation-${client.key}`;
   const refreshTicket = () => { setContextVersion(value => value + 1); void load(true); };
@@ -274,8 +281,9 @@ export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTi
       </div>
     </header>}
     {project && stageSummary && <div className="shrink-0 border-b border-divider px-6 pb-2">
-      <ProjectStageTracker summary={stageSummary} role="pm" unsetPrompt={false} />
+      <ProjectStageTracker summary={stageSummary} role="pm" unsetPrompt={false} nextActionControl={startDevelopment} />
     </div>}
+    <ProjectDiscoverySummaries summaries={discoverySummaries} />
   </>;
   return <div className="flex h-full min-h-0 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
     {projects && projects.length > 0 && <nav aria-label="Projects" className="shrink-0 border-b border-divider lg:w-52 lg:border-b-0 lg:border-r">

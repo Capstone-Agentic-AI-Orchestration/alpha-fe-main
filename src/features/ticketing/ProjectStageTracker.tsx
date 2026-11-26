@@ -1,16 +1,18 @@
 import { Check } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { nextActionLine, revisionAllowance, stageSteps, type StageSummary } from './projectStages';
 import './projectStages.css';
 
 /**
  * The stage strip both sides see under a project conversation's header:
- * POC → Contract → Development → Completed, the revision allowance, and whose
+ * Proof of concept → Development → Completed, the revision allowance, and whose
  * turn it is. A slim row, not a card.
  */
-export function ProjectStageTracker({ summary, role, unsetPrompt = true }: Readonly<{
+export function ProjectStageTracker({ summary, role, unsetPrompt = true, nextActionControl }: Readonly<{
   summary: StageSummary; role: 'client' | 'pm';
   /** Whether the row says the stage isn't set; the PM's side panel says it instead, beside the stage picker. */
   unsetPrompt?: boolean;
+  nextActionControl?: ReactNode;
 }>) {
   const steps = stageSteps(summary.stage);
   const allowance = revisionAllowance(summary);
@@ -24,10 +26,10 @@ export function ProjectStageTracker({ summary, role, unsetPrompt = true }: Reado
         <span className="sr-only">{step.state === 'done' ? ' (done)' : step.state === 'current' ? ' (current stage)' : ''}</span>
       </li>)}
     </ol>
-    <p className="ps-meta">
+    <div className="ps-meta">
       {unset && unsetPrompt && <span>{role === 'pm' ? 'This project started before stages. Choose where it is now.' : 'Stage not set yet'}</span>}
       {allowance && <span className="ps-allowance">{allowance}</span>}
-      {next && !(unset && role === 'pm') && <span className={next.mine ? 'ps-next is-mine' : 'ps-next'}>{next.mine ? 'Your turn: ' : ''}{next.text}</span>}
-    </p>
+      {nextActionControl ?? (next && !(unset && role === 'pm') && <span className={next.mine ? 'ps-next is-mine' : 'ps-next'}>{next.mine ? 'Your turn: ' : ''}{next.text}</span>)}
+    </div>
   </section>;
 }

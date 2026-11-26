@@ -1,7 +1,21 @@
-import type { ConversationItem, ConversationRequest } from './projectConversation';
+import type { ConversationItem, ConversationRequest, ProjectDiscoverySummary } from './projectConversation';
+import type { ClientProjectProposal } from './clientApi';
 
 /** Fictional sample conversation for the local ticketing preview only. */
 export const PREVIEW_CONVERSATION_PROJECT = { workspaceId: 'preview-workspace', projectId: 'preview-project-ops', projectName: 'Operations Dashboard' };
+
+export const PREVIEW_DISCOVERY_SUMMARIES: ProjectDiscoverySummary[] = [{
+  ticketId: 'preview-proposal-ops-request', title: 'Operations Dashboard',
+  body: 'Give the operations team one place to review weekly sales on desktop and mobile. Start with the existing reporting data and confirm that the mobile filters work for the team before signing. Finance will join after the first release.',
+}];
+
+export const PREVIEW_DISCOVERY_PROPOSAL: ClientProjectProposal = {
+  id: 'preview-proposal-inventory', title: 'Inventory alerts',
+  description: 'Help store managers see when stock is running low so they can reorder before running out.',
+  requestedDeadline: null, submittedAt: '2026-10-08T10:00:00+08:00', status: 'awaiting_client',
+  clarificationMessages: [{ id: 'preview-inventory-question', author: 'pm', createdAt: '2026-10-08T11:00:00+08:00',
+    body: 'Where do store managers check stock today, and who should receive a low-stock alert?' }],
+};
 
 // Both requests are sample requests DEMO-1044 and DEMO-1042, so opening either shows its progress and context.
 const filterRequest = { ticketId: 'preview-ticket-1044', reference: 'DEMO-1044', title: 'Review the mobile dashboard filter update' };

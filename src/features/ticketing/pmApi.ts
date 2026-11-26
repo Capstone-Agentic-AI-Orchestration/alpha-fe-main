@@ -405,9 +405,9 @@ export const pmTicketApi = {
     return { items, nextCursor: page.nextCursor as string | null };
   },
   /** Accept, create (or pick) the project and link them in one action. Retry with the same operationId. */
-  async startProjectFromIntake(intakeId: string, operationId: string, project: PmIntakeProjectChoice, clientVisible: boolean): Promise<PmIntakeProjectStart> {
+  async startProjectFromIntake(intakeId: string, operationId: string, project: PmIntakeProjectChoice, clientVisible: boolean, discoverySummary?: string): Promise<PmIntakeProjectStart> {
     const value = await apiService.ticketRequest<unknown>(`/tickets/intakes/${encodeId(intakeId)}/start-project`, {
-      method: 'POST', body: JSON.stringify({ schemaVersion: 1, operationId, project, clientVisible }),
+      method: 'POST', body: JSON.stringify({ schemaVersion: 1, operationId, project, clientVisible, discoverySummary }),
     });
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Project start response is invalid.');
     const row = value as Record<string, unknown>;

@@ -41,9 +41,9 @@ export function inquiryContact(item: Pick<PmCentralIntakeItem, 'fullName' | 'ema
 /** Where it stands, worded the same in the list and the header. */
 export function inquiryStatus(item: Pick<PmCentralIntakeItem, 'kind' | 'status' | 'clarificationMessages'>, view: 'pending' | 'handled'): string {
   if (view === 'handled') return item.status === 'accepted' ? 'Accepted' : 'Declined';
-  if (item.status === 'awaiting_client') return 'Waiting for the client';
-  if (item.kind === 'project_proposal' && item.clarificationMessages?.at(-1)?.author === 'client') return 'Client replied';
-  return item.kind === 'project_proposal' ? 'Ready for your review' : 'New · email not verified';
+  if (item.status === 'awaiting_client') return 'Waiting for client reply';
+  if (item.kind === 'project_proposal' && item.clarificationMessages?.at(-1)?.author === 'client') return 'Review client reply';
+  return item.kind === 'project_proposal' ? 'Review project idea' : 'New · email not verified';
 }
 
 /** What became of a handled inquiry, in one sentence. */

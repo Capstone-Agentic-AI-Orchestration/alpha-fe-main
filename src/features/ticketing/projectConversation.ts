@@ -20,6 +20,18 @@ export interface ConversationItem {
   stage?: StageEventInfo;
 }
 
+export interface ProjectDiscoverySummary {
+  ticketId: string;
+  title: string;
+  body: string;
+}
+
+export interface ProjectConversationTimeline {
+  items: ConversationItem[];
+  clientId?: string;
+  discoverySummaries?: ProjectDiscoverySummary[];
+}
+
 export type RequestChecklistStatus = 'open' | 'in_progress' | 'ready_to_check' | 'done' | 'declined' | 'cancelled';
 export interface ConversationLinkedTask { issueId: string; identifier: string; title: string; status: string }
 export interface ConversationRequest {
@@ -71,7 +83,7 @@ function parseItemTask(value: unknown): ConversationItem['task'] {
   return { issueId: value.issueId, identifier: value.identifier, title: value.title };
 }
 
-export function parseConversation(value: unknown): { items: ConversationItem[]; clientId?: string } {
+export function parseConversation(value: unknown): ProjectConversationTimeline {
   if (!record(value) || !Array.isArray(value.items)) invalid();
   const items = value.items.map((raw): ConversationItem => {
     if (!record(raw) || !nonEmpty(raw.id) || !KINDS.has(raw.kind as ConversationItemKind)
@@ -83,7 +95,14 @@ export function parseConversation(value: unknown): { items: ConversationItem[]; 
     return { id: raw.id, kind: raw.kind as ConversationItemKind, author: raw.author, body: raw.body, createdAt: raw.createdAt, request, task,
       ...(stage ? { stage } : {}) };
   });
-  return nonEmpty(value.clientId) ? { items, clientId: value.clientId } : { items };
+  const summaries = value.discoverySummaries;
+  if (summaries !== undefined && !Array.isArray(summaries)) invalid();
+  const discoverySummaries = summaries?.map((row): ProjectDiscoverySummary => {
+    if (!record(row) || !nonEmpty(row.ticketId) || !text(row.title) || !nonEmpty(row.body)) invalid();
+    return { ticketId: row.ticketId, title: row.title, body: row.body };
+  });
+  return { items, ...(nonEmpty(value.clientId) ? { clientId: value.clientId } : {}),
+    ...(discoverySummaries ? { discoverySummaries } : {}) };
 }
 
 export function parseConversationRequest(raw: unknown): ConversationRequest {
