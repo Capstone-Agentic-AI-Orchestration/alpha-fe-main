@@ -26,10 +26,10 @@ export function projectPrefill(item: Pick<PmCentralIntakeItem, 'title' | 'descri
   };
 }
 
-/** Shared inquiry intake as a distinct PM sidebar destination. */
+/** Where a project manager answers an inquiry; the Inbox, Needs your attention and Clients open it. */
 export function PmInquiriesPage() {
   const [refreshToken, setRefreshToken] = useState(0);
-  const { activeWorkspace, setActiveTab, showToast, projects, refreshBoardState } = useApp();
+  const { activeWorkspace, setActiveTab, showToast, projects, refreshBoardState, visibleTabs } = useApp();
   const [openInquiry, setOpenInquiry] = useTabSessionState<OpenInquiry | null>(OPEN_INQUIRY_KEY, null);
   const [openRequest, setOpenRequest] = useState<{ ticketId: string; reference?: string } | null>(null);
   const workflowActions = usePmWorkflowActions();
@@ -91,6 +91,8 @@ export function PmInquiriesPage() {
 
   return <div className="pm-ticket-page pm-ticket-page--nested">
     <nav aria-label="Inquiries actions" className="pm-ticket-page__tabs">
+      {/* Not in the sidebar any more: the way back is to the Inbox that lists every inquiry. */}
+      {visibleTabs.includes('inbox') && <Button variant="ghost" size="sm" onClick={() => setActiveTab('inbox')}><ArrowLeft size={14} aria-hidden="true" />Back to Inbox</Button>}
       <div className="pm-ticket-page__tab-actions">
         <Button variant="ghost" size="sm" onClick={() => setRefreshToken(value => value + 1)}
           aria-label="Refresh inquiries" title="Refresh inquiries">
