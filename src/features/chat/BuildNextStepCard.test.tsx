@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import { BuildNextStepCard } from './BuildNextStepCard';
+import { BuildNextStepCard, findingsToPolish, polishRequest } from './BuildNextStepCard';
 import { approvalBlocker } from './useBuildApproval';
 import { mergeIntoDev } from './useDevMerge';
 import type { ProjectBuildOrchestration } from '@/shared/types';
@@ -23,41 +23,58 @@ const render = (value: ProjectBuildOrchestration, canApprove = true) => renderTo
 
 /** After a build, the conversation says it is done and what to do next. */
 describe('the next step under a finished build', () => {
-  it('says the build is finished, sums it up, and offers review, approval and changes', () => {
+  it('says the build is finished in a sentence, and asks whether to open the pull request', () => {
     const html = render(orchestration('awaiting_approval'));
-    expect(html).toContain('Build finished · ready for your review');
-    expect(html).toContain('2 of 2 tasks done · 2 of 2 checks passed · no open findings');
-    expect(html).toContain('Next:');
-    expect(html).toContain('Review changes');
-    expect(html).toContain('Approve and open pull request');
-    expect(html).toContain('Ask for changes');
+    expect(html).toContain('The build is finished. All 2 tasks are done, and every check passed.');
+    expect(html).toContain('Want me to open the pull request? You can also ask for changes first.');
+    expect(html).toContain('>Open the pull request</button>');
+    expect(html).toContain('>Ask for changes</button>');
+    expect(html).toContain('>Review the changes</button>');
+    expect(html).not.toContain('polish');
+  });
+
+  it('lists only findings about the product as things to polish, and offers to polish them first', () => {
+    const findings = [
+      { id: 'f1', status: 'open', severity: 'warning', title: 'Contact link uses an illustrative address', path: 'src/App.tsx' },
+      { id: 'f2', status: 'open', severity: 'warning', title: 'Accepted handoff and patch record disagree' },
+      { id: 'f3', status: 'resolved', severity: 'warning', title: 'Fixed already', path: 'src/App.css' }
+    ];
+    const value = orchestration('awaiting_approval', { findings, finalValidation: { status: 'failed', missingScripts: [], commands: [{ script: 'test', exitCode: 1, signal: null }] } });
+    expect(findingsToPolish(value).map(finding => finding.id)).toEqual(['f1']);
+    const html = render(value);
+    expect(html).toContain('1 of 1 checks failed');
+    expect(html).toContain('One thing you may want to polish first:');
+    expect(html).toContain('Contact link uses an illustrative address');
+    expect(html).not.toContain('Accepted handoff and patch record disagree');
+    expect(html).toContain('Want me to open the pull request, or polish those first?');
+    expect(html).toContain('>Polish them first</button>');
+    expect(polishRequest(findingsToPolish(value))).toBe('Please polish these first:\n- Contact link uses an illustrative address (src/App.tsx)');
   });
 
   it('says why approval is not offered, rather than showing a button that cannot work', () => {
     const noRole = render(orchestration('awaiting_approval'), false);
     expect(noRole).toContain('A developer, PM, or admin must approve publication.');
-    expect(noRole).not.toContain('Approve and open pull request');
+    expect(noRole).not.toContain('>Open the pull request</button>');
     const blocked = render(orchestration('awaiting_approval', { findings: [{ id: 'f', status: 'open', severity: 'critical' }] }));
     expect(blocked).toContain('Blocking findings must be resolved before approval.');
-    expect(blocked).toContain('1 open finding');
-    expect(blocked).not.toContain('Approve and open pull request');
+    expect(blocked).not.toContain('>Open the pull request</button>');
   });
 
   it('shows the pull request it opened and what comes after', () => {
     const html = render(orchestration('completed', { run: { id: 'run-1', status: 'completed', revision: 13,
       publications: [{ repository: 'acme/web-fe', pullRequestUrl: 'https://github.com/acme/web-fe/pull/4' }] } }));
-    expect(html).toContain('Done · pull request opened');
+    expect(html).toContain('The pull request is open.');
     expect(html).toContain('https://github.com/acme/web-fe/pull/4');
     // Merging is a typed delivery action (or "merge it" in the chat), never done on GitHub by hand.
-    expect(html).toContain('merge it into dev once its checks pass');
+    expect(html).toContain('Merge it into dev once its checks pass');
     expect(html).toMatch(/<button type="button"[^>]*>(?:(?!<\/button>).)*Merge into dev<\/button>/);
     expect(html).not.toContain('on GitHub');
   });
 
   it('says an investigation needs no pull request', () => {
     const html = render(orchestration('completed', { tasks: [{ id: 't', title: 'Look', ownerName: 'Architect', status: 'accepted', required: true, kind: 'analysis' }] }));
-    expect(html).toContain('Investigation complete');
-    expect(html).not.toContain('pull request opened');
+    expect(html).toContain('The investigation is done.');
+    expect(html).not.toContain('The pull request is open.');
   });
 
   it('says why publishing stopped and offers Retry, or a reply in the chat', () => {
