@@ -59,7 +59,8 @@ const PROJECT_TOOL_VERBS: Readonly<Record<string, string>> = {
   grep: 'Searched the code',
   write_file: 'Edited',
   edit_file: 'Edited',
-  replace_in_file: 'Edited'
+  replace_in_file: 'Edited',
+  submit_work: 'Handed in the work'
 };
 
 function detailField(detail: string | undefined, field: string): string | undefined {

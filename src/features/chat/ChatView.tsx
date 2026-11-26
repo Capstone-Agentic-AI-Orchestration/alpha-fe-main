@@ -45,7 +45,6 @@ import {
   Paperclip,
   Image as ImageIcon,
   ListChecks,
-  PanelRight,
   Play,
   Plus,
   RefreshCw,
@@ -86,7 +85,6 @@ import { OrchestratorFlow, isOrchestratorCall } from './OrchestratorFlow';
 import { AgentActivityPanel } from './AgentActivityPanel';
 import { BuildAgentActivityPanel } from './BuildAgentActivityPanel';
 import { ChatSidePanel, type SidePanelTab } from './ChatSidePanel';
-import { BuildReviewTab, SavedBuildReviewTab } from './BuildReviewTab';
 import { LiveChangesView } from './LiveChangesView';
 import { buildActivityAnchors } from './buildActivityAnchor';
 import { ChatBuildWizard, buildRefusalFrom, planningFailureReason, type BuildPlanningFailure, type BuildRefusal, type PlanCorrection } from './ChatBuildWizard';
@@ -259,7 +257,7 @@ function OrchestratorBuildActivityRow({
         if (cancelled) return;
         setSnapshot(next);
         if (next.orchestration?.run.id !== runId) {
-          setError('Run details could not be matched to this chat update. The saved Build review tab contains the build details.');
+          setError('Run details could not be matched to this chat update. The full build report on its task has the details.');
           return;
         }
         setError('');
@@ -337,7 +335,7 @@ function OrchestratorBuildActivityRow({
         setRetryNotice('The task restarted. Alpha will check its new result before handing work to the next specialist.');
         setRetryNoticeTaskId(failedTask.id);
       } else {
-        setRetryError(refreshed.orchestration?.run.stoppedReason || 'Alpha could not start the retry. Open the Build review tab to review the saved reason.');
+        setRetryError(refreshed.orchestration?.run.stoppedReason || 'Alpha could not start the retry. The full build report on its task has the saved reason.');
         setRetryNotice('');
         setRetryNoticeTaskId('');
       }
@@ -451,9 +449,11 @@ type SideTab =
   | { id: string; kind: 'plan'; projectId: string; runId: string; planVersion: number }
   | { id: string; kind: 'agent'; agentId: string }
   | { id: string; kind: 'call'; callId: string }
-  | { id: string; kind: 'review'; projectId: string; runId: string }
   | { id: string; kind: 'preview' }
   | { id: string; kind: 'changes'; projectId: string; runId: string };
+
+/** What the sheet beside the chat can show. */
+const SHEET_KINDS: ReadonlySet<string> = new Set(['plan', 'agent', 'call', 'preview', 'changes']);
 
 /** The status line's word for a working build. */
 const BUILD_WORKING_WORDS: Partial<Record<string, string>> = { planning: 'Planning', validating: 'Checking', cancelling: 'Stopping' };
@@ -495,6 +495,8 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
     setActiveTab,
     setTabSessionState,
     activeTabId,
+    openNewTab,
+    visibleTabs,
     agents: workspaceAgents,
     runtimes,
     skills,
@@ -524,51 +526,36 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
   const [chatTurnActionBusy, setChatTurnActionBusy] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  /** What is open in the right side panel, one tab each, and which tab is showing. */
+  /** The sheet beside the chat: one thing at a time (a diff, the plan, a preview, an agent), closed until opened. */
   const panelKey = (key: string) => `${sessionStateKey(key)}.${activeWorkspace?.id ?? ''}.${currentUser?.id ?? ''}`;
-  const [panelVisible, setPanelVisible] = useTabSessionState<boolean>(panelKey('panelVisible'), false);
   // Closed until someone opens it: a chat opens on the conversation, and the summary is one click away.
   const [summaryOpen, setSummaryOpen] = useTabSessionState<boolean>(panelKey('summaryOpen'), false);
-
-  const showSidePanel = () => {
-    setPanelVisible(true);
-    setSummaryOpen(false);
-  };
-
-  const toggleSidePanel = () => {
-    if (panelVisible) setPanelVisible(false);
-    else showSidePanel();
-  };
-  // The side panel slides open and shut from its button.
-  const sidePanelPresence = usePanelPresence(Boolean(panelVisible));
   const [sideTabs, setSideTabs] = useTabSessionState<SideTab[]>(panelKey('sideTabs'), []);
-  const [activeSideTabId, setActiveSideTabId] = useTabSessionState<string | null>(panelKey('activeSideTab'), null);
-  const [openedReviewDecisions, setOpenedReviewDecisions] = useTabSessionState<string[]>(sessionStateKey('openedReviewDecisions'), []);
-  const activeSideTab = sideTabs.find(tab => tab.id === activeSideTabId) ?? null;
+  // A Build review tab saved before the report moved to the task's page is not reopened.
+  const activeSideTab = sideTabs.filter(tab => SHEET_KINDS.has(tab.kind)).at(-1) ?? null;
+  // The sheet slides shut showing what it showed, so keep the last one while it closes.
+  const lastSheet = useRef<SideTab | null>(null);
+  if (activeSideTab) lastSheet.current = activeSideTab;
+  const sidePanelPresence = usePanelPresence(Boolean(activeSideTab));
   const inspectedCallId = activeSideTab?.kind === 'call' ? activeSideTab.callId : null;
   const inspectedBuildAgentId = activeSideTab?.kind === 'agent' ? activeSideTab.agentId : null;
-  const openSideTab = (tab: SideTab, focus = true) => {
-    setSideTabs(current => current.some(item => item.id === tab.id) ? current.map(item => item.id === tab.id ? tab : item) : [...current, tab]);
-    if (focus) { setActiveSideTabId(tab.id); showSidePanel(); }
-    else { setActiveSideTabId(active => active ?? tab.id); if (!sideTabs.length) showSidePanel(); }
+  const openSideTab = (tab: SideTab) => {
+    if (activeSideTab?.kind === 'preview' && tab.kind !== 'preview') void previews.stop();
+    setSideTabs([tab]);
+    setSummaryOpen(false);
   };
-  const closeSideTab = (id: string) => {
-    if (sideTabs.find(tab => tab.id === id)?.kind === 'preview') void previews.stop();
-    setSideTabs(current => {
-      const index = current.findIndex(item => item.id === id);
-      const next = current.filter(item => item.id !== id);
-      setActiveSideTabId(active => active === id ? next[Math.min(index, next.length - 1)]?.id ?? null : active);
-      return next;
-    });
+  const closeSideTab = () => {
+    if (activeSideTab?.kind === 'preview') void previews.stop();
+    setSideTabs([]);
   };
   /** Plans that opened by themselves, once per version, so a closed plan tab stays closed. */
   const autoOpenedPlans = useRef(new Set<string>());
   const openPlanTab = (request: PlanPanelRequest) => {
     const key = request.runId + ':' + request.planVersion;
-    if (request.auto && autoOpenedPlans.current.has(key)) return;
+    // The sheet opens only when someone asks for it; a plan that is ready is announced in the chat.
+    if (request.auto) return;
     autoOpenedPlans.current.add(key);
-    // Opening by itself adds the tab without taking over the agent you are watching.
-    openSideTab({ id: 'plan:' + request.runId, kind: 'plan', projectId: request.projectId, runId: request.runId, planVersion: request.planVersion }, !request.auto);
+    openSideTab({ id: 'plan:' + request.runId, kind: 'plan', projectId: request.projectId, runId: request.runId, planVersion: request.planVersion });
   };
   const [buildDecisionBusy, setBuildDecisionBusy] = useState<'start' | 'approve' | 'stop' | 'continue' | 'retry' | null>(null);
   const [buildDecisionError, setBuildDecisionError] = useState<string | null>(null);
@@ -629,14 +616,17 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
   const [stopArmed, setStopArmed] = useState(false);
   // What Esc stops right now (the response or the working build); set each render below.
   const escStopRef = useRef<(() => void) | null>(null);
+  const escCloseRef = useRef<(() => void) | null>(null);
   useEffect(() => {
     if (!isActiveTab) return undefined;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || event.defaultPrevented || !escStopRef.current) return;
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      const action = escCloseRef.current ?? escStopRef.current;
+      if (!action) return;
       // Esc closes an open dialog or menu first.
       if (document.querySelector('[role="dialog"], [role="menu"], [role="listbox"]')) return;
       event.preventDefault();
-      escStopRef.current();
+      action();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
@@ -720,7 +710,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
     runAnchorId(currentMessages.filter(message => message.senderType !== 'system' && !message.agentCallId), run.createdAt)]));
   const updateBoardRun = (run: BoardRun) => boardRuns.setRuns(current => [run, ...current.filter(item => item.id !== run.id)]);
   const boardRunCards = (anchorId: string | null) => boardRunsHere.filter(run => boardRunAnchors.get(run.id) === anchorId)
-    .map(run => <BoardRunCard key={run.id} run={run} onChange={updateBoardRun} onOpenBuild={openSavedBuildReview} />);
+    .map(run => <BoardRunCard key={run.id} run={run} onChange={updateBoardRun} onOpenBuild={openBuildReport} />);
   const previews = useLocalPreviews(activeThreadId ?? undefined, `${activeWorkspace?.id}:${currentUser?.id}:${activeThreadId}`, Boolean(project && !isClient && isActiveTab), openPreview);
   // The preview card stays under the reply that started it, not pinned below the newest message.
   // Only ordinary replies are eligible: agent-call and system rows are drawn without it.
@@ -737,16 +727,22 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
   const buildIsOpen = Boolean(liveBuild);
   const canStopBuild = !isClient && can('run_builds') && buildIsOpen && liveBuild?.status !== 'cancelling' && liveBuild?.status !== 'publishing';
   const buildDecisionKey = liveBuild ? liveBuild.runId + ':' + liveBuild.status : '';
-  const openBuildReview = () => {
-    if (latestBuild && project) openSideTab({ id: 'review:' + latestBuild.runId, kind: 'review', projectId: project.id, runId: latestBuild.runId });
+  /** A build's full report is on its task's page on the board; it opens there, in a new tab. */
+  const openBuildReport = (runId: string) => {
+    const projectId = activeThread?.projectId ?? project?.id;
+    if (!projectId) return;
+    apiService.getProjectBuildSnapshot(projectId, runId)
+      .then(build => {
+        const issueId = build.issue?.id;
+        if (!issueId || !visibleTabs.includes('issues')) {
+          showToast('No task for this build', 'This build is not linked to a task on the board.', 'info');
+          return;
+        }
+        openNewTab('issues', { 'issues.project': projectId, 'issues.selectedIssue': issueId, 'issues.drawerTab': 'build' });
+      })
+      .catch(error => showToast('Build report not opened', userMessage(error, 'The build could not be loaded.'), 'error'));
   };
-  useEffect(() => {
-    if (isClient || !latestBuild || !project || !['awaiting_plan_approval', 'awaiting_approval', 'completed'].includes(latestBuild.status)) return;
-    const key = `${latestBuild.runId}:${latestBuild.status}:${latestBuild.orchestration.run.planVersion}`;
-    if (openedReviewDecisions.includes(key)) return;
-    setOpenedReviewDecisions(current => [...current, key]);
-    openBuildReview();
-  }, [activeThreadId, isClient, latestBuild?.runId, latestBuild?.status, latestBuild?.orchestration.run.planVersion, openedReviewDecisions]);
+  const openBuildReview = () => { if (latestBuild) openBuildReport(latestBuild.runId); };
   useEffect(() => { setBuildDecisionError(null); setBuildRefusal(null); }, [buildDecisionKey]);
   const resumePausedBuild = async () => {
     if (!liveBuild || !project?.id) return;
@@ -766,13 +762,13 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
   };
   const selectCall = (callId: string | null) => {
     if (callId) openSideTab({ id: 'call:' + callId, kind: 'call', callId });
-    else if (activeSideTab?.kind === 'call') closeSideTab(activeSideTab.id);
+    else if (activeSideTab?.kind === 'call') closeSideTab();
   };
   const selectBuildAgent = (agentId: string | null) => {
     const selected = workspaceAgents.find(agent => agent.id === agentId);
     if (selected && (selected.templateKey === 'orchestrator' || /orchestrator/i.test(selected.role)) && latestBuild) { openBuildReview(); return; }
     if (agentId) openSideTab({ id: 'agent:' + agentId, kind: 'agent', agentId });
-    else if (activeSideTab?.kind === 'agent') closeSideTab(activeSideTab.id);
+    else if (activeSideTab?.kind === 'agent') closeSideTab();
   };
 
   useEffect(() => {
@@ -1174,7 +1170,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
       setInput(current => current.trim() === message.trim() ? '' : current);
       await refreshChatThread(activeThread.id);
       followNextMessage();
-      if (action === 'review_saved_changes') openSavedBuildReview(runId);
+      if (action === 'review_saved_changes' && activeThread.projectId) openSideTab({ id: 'changes:' + runId, kind: 'changes', projectId: activeThread.projectId, runId });
       showToast(action === 'explain_failure' ? 'Build explanation' : 'Build recovery updated',
         result.explanation ?? result.message ?? 'Alpha saved the recovery action.',
         action === 'explain_failure' ? 'info' : 'success');
@@ -1247,7 +1243,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
 
   /** The build decision a message answers, unless it starts a new build or the person reads another build. */
   const messageBuildDecision = (sendsBuild: boolean) => {
-    const readingAnotherBuild = liveBuild && (activeSideTab?.kind === 'review' || activeSideTab?.kind === 'plan' || activeSideTab?.kind === 'changes') && activeSideTab.runId !== liveBuild.runId;
+    const readingAnotherBuild = liveBuild && (activeSideTab?.kind === 'plan' || activeSideTab?.kind === 'changes') && activeSideTab.runId !== liveBuild.runId;
     return sendsBuild ? undefined : buildDecisionContext(liveBuild, Boolean(readingAnotherBuild));
   };
 
@@ -1373,7 +1369,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
         showToast('Build stopped', 'The agents are stopping. Work already on the build branch remains available for review.', 'success');
       } else {
         const failure = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
-        showToast(stoppedCount ? 'Some builds could not be stopped' : 'Could not stop build', userMessage(failure?.reason, 'Check the Build review tab for current status.'), 'error');
+        showToast(stoppedCount ? 'Some builds could not be stopped' : 'Could not stop build', userMessage(failure?.reason, 'The full build report on its task has its current status.'), 'error');
       }
     } finally {
       setStoppingProjectRunId(null);
@@ -1457,7 +1453,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
   };
   const openBlocker = () => {
     const blocker = buildFailure?.blocker;
-    if (blocker) openSavedBuildReview(blocker.runId);
+    if (blocker) openBuildReport(blocker.runId);
   };
   const replyInComposer = (prefill?: string) => {
     if (prefill) setInput(prefill);
@@ -1556,11 +1552,6 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
     </div>;
   };
 
-
-  const openSavedBuildReview = (runId: string) => {
-    if (!activeThread?.projectId) return;
-    openSideTab({ id: 'review:' + runId, kind: 'review', projectId: activeThread.projectId, runId });
-  };
 
   const updateMessageInput = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
     const next = event.target.value;
@@ -1717,7 +1708,6 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
     setTabSessionState(activeTabId, 'chat.session.draft.selectedAgent', '');
     setTabSessionState(activeTabId, 'chat.session.draft.buildRepositories', []);
     setTabSessionState(activeTabId, 'chat.session.draft.sideTabs', []);
-    setTabSessionState(activeTabId, 'chat.session.draft.activeSideTab', null);
     setActiveThreadId(null);
     setDraftProjectChoice(projectId ?? '');
   };
@@ -1835,6 +1825,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
   let escHint = escStop ? 'Esc to stop' : '';
   if (stoppingProjectRunId || chatTurnActionBusy) escHint = 'Stopping…';
   else if (escStop === 'build' && stopArmed) escHint = 'Press Esc again to stop the build';
+  escCloseRef.current = activeSideTab ? closeSideTab : null;
   escStopRef.current = escStop && !stoppingProjectRunId && !chatTurnActionBusy
     ? () => void (escStop === 'turn' ? stopChatTurn() : stopProjectBuild())
     : null;
@@ -1847,7 +1838,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
   const openBuildChanges = () => { if (liveBuild && project) openSideTab({ id: 'changes:' + liveBuild.runId, kind: 'changes', projectId: project.id, runId: liveBuild.runId }); };
   // The single next step for the person, offered on the Orchestrator bar.
   const orchestratorAction = isClient || !project || !latestBuild ? null
-    : latestBuild.status === 'awaiting_plan_approval' ? { label: 'Review plan', onClick: openBuildReview }
+    : latestBuild.status === 'awaiting_plan_approval' ? { label: 'Review plan', onClick: () => openSideTab({ id: 'plan:' + latestBuild.runId, kind: 'plan', projectId: project.id, runId: latestBuild.runId, planVersion: latestBuild.orchestration.run.planVersion }) }
       : latestBuild.status === 'awaiting_approval' ? { label: 'Review changes', onClick: buildChangedFiles.length ? openBuildChanges : openBuildReview }
         : ['paused', 'blocked', 'recovery_required'].includes(latestBuild.status) ? { label: 'See what it needs', onClick: openBuildReview }
           : null;
@@ -1856,7 +1847,6 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
       case 'preview': return { id: tab.id, title: 'Web preview', icon: <Globe className="h-3.5 w-3.5" />, live: previews.record?.state === 'starting' };
       case 'plan': return { id: tab.id, title: planFileName(tab.planVersion), icon: <FileText className="h-3.5 w-3.5" /> };
       case 'changes': return { id: tab.id, title: 'Changes', icon: <Code2 className="h-3.5 w-3.5" />, live: Boolean(liveBuild?.running && liveBuild.runId === tab.runId) };
-      case 'review': return { id: tab.id, title: 'Build review', icon: <ShieldCheck className="h-3.5 w-3.5" />, live: Boolean(liveBuild?.running && liveBuild.runId === tab.runId) };
       case 'agent': {
         const agent = latestBuild?.agents.find(item => item.agentId === tab.agentId);
         return { id: tab.id, title: agent?.name ?? workspaceAgents.find(item => item.id === tab.agentId)?.name ?? 'Agent', icon: <Bot className="h-3.5 w-3.5" />, live: Boolean(latestBuild?.running && agent?.state === 'running') };
@@ -1871,9 +1861,6 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
     switch (tab.kind) {
       case 'preview': return <LocalPreviewTab record={previews.record} error={previews.error} blocked={Boolean(!isActiveTab || memoryThreadId || threadPendingDelete || showCreateProject || repositoryMenuOpen)} />;
       case 'plan': return <PlanDocumentTab key={tab.id + ':' + tab.planVersion} projectId={tab.projectId} runId={tab.runId} planVersion={tab.planVersion} />;
-      case 'review': return latestBuild?.runId === tab.runId
-        ? <BuildReviewTab key={tab.id + ':' + latestBuild.revision} projectId={tab.projectId} build={latestBuild} canStart={Boolean(liveBuild?.canControl) && can('run_builds')} canApprove={Boolean(liveBuild) && can('publish_build')} busy={Boolean(buildDecisionBusy)} error={buildDecisionError} />
-        : activeThreadId ? <SavedBuildReviewTab key={tab.id} projectId={tab.projectId} runId={tab.runId} threadId={activeThreadId} /> : null;
       case 'changes': return <div key={tab.id} className="min-h-0 flex-1 overflow-y-auto p-4"><LiveChangesView projectId={tab.projectId} runId={tab.runId} live={Boolean(liveBuild?.running && liveBuild.runId === tab.runId)} /></div>;
       case 'agent': {
         const agent = latestBuild?.agents.find(item => item.agentId === tab.agentId);
@@ -1883,7 +1870,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
         }
         const tasks = latestBuild.orchestration.tasks.filter(task => task.ownerAgentId === agent.agentId);
         const task = tasks.find(item => item.status === 'running' || item.status === 'submitted') ?? tasks[0];
-        return <BuildAgentActivityPanel key={tab.id} agent={agent} projectId={project.id} runId={latestBuild.runId} repository={task?.repository ?? latestBuild.repository} onOpenReview={() => openSavedBuildReview(latestBuild.runId)} usage={<WorkUsageRow entries={(usage.snapshot?.entries ?? []).filter(entry => entry.agentId === agent.agentId && entry.orchestrationRunId === latestBuild.runId)} now={usage.now} names={usageNames} />} />;
+        return <BuildAgentActivityPanel key={tab.id} agent={agent} projectId={project.id} runId={latestBuild.runId} repository={task?.repository ?? latestBuild.repository} onOpenReview={() => openBuildReport(latestBuild.runId)} usage={<WorkUsageRow entries={(usage.snapshot?.entries ?? []).filter(entry => entry.agentId === agent.agentId && entry.orchestrationRunId === latestBuild.runId)} now={usage.now} names={usageNames} />} />;
       }
       case 'call': {
         const call = calls[tab.callId];
@@ -1891,13 +1878,6 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
         return <AgentActivityPanel key={tab.id} call={call} agent={agentForCall(call)} name={isOrchestratorCall(call) ? 'Orchestrator' : undefined} subtitle={isOrchestratorCall(call) ? (project?.name ?? 'Alpha') + ' · Alpha' : undefined} usage={<WorkUsageRow entries={(usage.snapshot?.entries ?? []).filter(entry => entry.callId === call.id)} now={usage.now} names={usageNames} />} />;
       }
     }
-  };
-
-  /** The panel only shows; decisions are made in the chat. With a build and no tab open, it shows the build's changes. */
-  const sidePanelBody = (): React.ReactNode => {
-    if (activeSideTab) return renderSideTab(activeSideTab);
-    if (latestBuild && project) return renderSideTab({ id: 'changes:' + latestBuild.runId, kind: 'changes', projectId: project.id, runId: latestBuild.runId });
-    return <section className="p-5"><p className="text-xs text-content-secondary">Plans, progress and changes appear here during a build.</p></section>;
   };
 
   const projectSummaryId = `chat-project-summary-${activeTabId}`;
@@ -1983,7 +1963,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
     const projectId = project.id;
     const requestId = message.id.slice(0, -'-build'.length);
     return <OrchestratorBuildActivityRow projectId={projectId} runId={runId} threadId={activeThread.id}
-      onOpenReview={() => openSavedBuildReview(runId)}
+      onOpenReview={() => openBuildReport(runId)}
       onViewChanges={() => openSideTab({ id: 'changes:' + runId, kind: 'changes', projectId, runId })}
       onWithdraw={canRouteBuild && message.id.endsWith('-build') ? () => void routeChatMessage(requestId, 'answer') : undefined}
       withdrawing={routingMessageId === requestId}
@@ -2064,14 +2044,13 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
               <Button variant="ghost" size="icon" aria-label={summaryOpen ? 'Hide project summary' : 'Show project summary'} aria-expanded={summaryOpen} aria-controls={projectSummaryId} title="Project summary" onClick={() => setSummaryOpen(value => !value)} className={`rounded-lg ${summaryOpen ? 'bg-surface-high text-content' : ''}`}><ListChecks className="h-4 w-4" /></Button>
               <span className="h-6 w-px bg-divider" />
               {latestBuild && project && <button type="button" onClick={() => openSideTab({ id: 'changes:' + latestBuild.runId, kind: 'changes', projectId: project.id, runId: latestBuild.runId })} className="rounded-lg px-2 py-1 text-xs text-content-secondary hover:bg-surface-high hover:text-content">Changes</button>}
-              <Button id="chat-panel-toggle" variant="ghost" size="icon" aria-label={panelVisible ? 'Hide open tabs' : 'Show open tabs'} aria-expanded={Boolean(panelVisible)} aria-controls="chat-side-panel" title="Open tabs" onClick={toggleSidePanel} className="rounded-lg"><PanelRight className="h-4 w-4" /></Button>
             </>}
           </header>
           <ChatConversationLayout summaryOpen={!isClient && summaryOpen} summary={projectSummary}>
           {!isClient && chatSyncStatus?.state === 'failed' && <div className="shrink-0 px-5 pt-3 lg:px-7"><div className="mx-auto flex max-w-3xl items-center justify-between gap-3 rounded-full border border-status-warning-border bg-status-warning-subtle px-4 py-2 text-[11px] text-status-warning"><span>Chat sync paused</span><button type="button" onClick={() => void handleRetryChatSync()} disabled={syncRetrying} className="font-medium hover:text-content disabled:opacity-50">{syncRetrying ? 'Retrying…' : 'Retry'}</button></div></div>}
 
 
-          {CHAT_ORCHESTRATOR_BAR_ENABLED && !isClient && <div className="relative z-20 shrink-0 px-5 pt-2 lg:px-7"><OrchestratorFlow calls={callList} agents={snapshot?.agents ?? []} isWorking={isAgentTyping} title={project?.name ?? 'Alpha'} selectedCallId={inspectedCall ? inspectedCallId : null} onSelectCall={selectCall} build={latestBuild ? { runId: latestBuild.runId, label: buildStatusLabel(latestBuild), running: latestBuild.running, status: latestBuild.status, agents: latestBuild.agents, handoffs: buildHandoffs(latestBuild.orchestration) } : null} sidePanelOpen={Boolean(panelVisible)} selectedBuildAgentId={inspectedBuildAgent ? inspectedBuildAgentId : null} onSelectBuildAgent={selectBuildAgent} roster={workspaceAgents} runtimes={runtimes} canEditAgents={can('manage_agents')} onUpdateAgent={updateAgent} action={orchestratorAction} /></div>}
+          {CHAT_ORCHESTRATOR_BAR_ENABLED && !isClient && <div className="relative z-20 shrink-0 px-5 pt-2 lg:px-7"><OrchestratorFlow calls={callList} agents={snapshot?.agents ?? []} isWorking={isAgentTyping} title={project?.name ?? 'Alpha'} selectedCallId={inspectedCall ? inspectedCallId : null} onSelectCall={selectCall} build={latestBuild ? { runId: latestBuild.runId, label: buildStatusLabel(latestBuild), running: latestBuild.running, status: latestBuild.status, agents: latestBuild.agents, handoffs: buildHandoffs(latestBuild.orchestration) } : null} sidePanelOpen={Boolean(activeSideTab)} selectedBuildAgentId={inspectedBuildAgent ? inspectedBuildAgentId : null} onSelectBuildAgent={selectBuildAgent} roster={workspaceAgents} runtimes={runtimes} canEditAgents={can('manage_agents')} onUpdateAgent={updateAgent} action={orchestratorAction} /></div>}
           <div ref={transcriptRef} onScroll={onScroll} aria-label="Conversation messages" style={{ paddingBottom: composerHeight + 120 }} className={`flex-1 min-h-0 overflow-y-auto overscroll-contain p-5 lg:p-7 [overflow-anchor:none] [mask-image:linear-gradient(to_bottom,transparent,black_20px)] `}><div className={'mx-auto w-full max-w-6xl space-y-5 ' + (currentMessages.length === 0 ? 'h-full' : '')}>{currentMessages.length === 0 && activeTranscript === 'loading' ? <LoadingRows label="Loading messages" layout="conversation" /> : currentMessages.length === 0 && activeTranscript === 'error' && activeThread ? <div role="alert" className="space-y-2 py-4 text-sm text-content-secondary"><p>Could not load this conversation.</p><button type="button" className="text-link" onClick={() => loadTranscript(activeThread.id)}>Retry loading messages</button></div> : currentMessages.length === 0 ? <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-4"><div className="h-12 w-12 rounded-2xl border border-divider bg-selected flex items-center justify-center"><Sparkles className="h-6 w-6 text-link" /></div><div className="space-y-1.5"><h3 className="text-base font-semibold text-content">{isClient ? `Message ${pmName}` : 'Start a project conversation'}</h3><p className="text-xs text-content-muted max-w-md leading-relaxed">{isClient ? `${pmName} manages your project and can help with scope, progress, and timing.` : project ? 'Ask a question or describe a product change. For a change, Alpha plans it as the Orchestrator and waits for your approval before any code changes.' : 'Ask Alpha anything. Choose a project above when you want Alpha to plan a build in its codebases.'}</p></div></div> : currentMessages.map(renderTranscriptMessage)}{previews.record && !previewAnchor && <WebPreviewCard record={previews.record} onOpen={openPreview} />}{boardRunCards(null)}</div></div>
 
           <div ref={composerRef} className="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-shell px-5 pb-4 pt-2 before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-10 before:bg-gradient-to-t before:from-shell before:to-transparent before:content-[''] lg:px-7 lg:pb-6">
@@ -2111,6 +2090,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
                 onStopBlocker={() => void stopBlockerAndRetry()}
                 onOpenBlocker={openBlocker}
                 onOpenReview={openBuildReview}
+                onOpenPlan={latestBuild && project ? () => openSideTab({ id: 'plan:' + latestBuild.runId, kind: 'plan', projectId: project.id, runId: latestBuild.runId, planVersion: latestBuild.orchestration.run.planVersion }) : undefined}
                 />}
               {forcedBuild && !isClient && <div className={`px-4 text-[10px] ${requiresRepositorySelection ? 'text-status-warning' : 'text-content-muted'}`}>{repositorySelectionMessage}</div>}
               {queuedMessage && <ChatQueuedMessage message={queuedMessage} onEdit={editQueuedMessage} onCancel={() => dropQueuedMessage(queuedMessage.threadId)} />}
@@ -2229,8 +2209,8 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
               onOpenRecent={threadId => setActiveThreadId(threadId)}
             />}
       </main>
-      {!isClient && sidePanelPresence.mounted && <ChatSidePanel variant="inset" widthStorageKey="alpha.chatSidePanelWidth.inset" defaultWidth={300} minWidth={260} motion={sidePanelPresence.closing ? 'closing' : 'opening'} tabs={sideTabs.map(sideTabMeta)} activeId={activeSideTabId} onSelect={setActiveSideTabId} onClose={closeSideTab} onCloseAll={() => { setPanelVisible(false); document.getElementById('chat-panel-toggle')?.focus(); }}>
-        {sidePanelBody()}
+      {!isClient && sidePanelPresence.mounted && lastSheet.current && <ChatSidePanel variant="sheet" widthStorageKey="alpha.chatSidePanelWidth.inset" defaultWidth={420} minWidth={300} motion={sidePanelPresence.closing ? 'closing' : 'opening'} tabs={[sideTabMeta(lastSheet.current)]} activeId={lastSheet.current.id} onSelect={() => undefined} onClose={closeSideTab} onCloseAll={closeSideTab}>
+        {renderSideTab(lastSheet.current)}
       </ChatSidePanel>}
     </div>
     </PlanPanelContext.Provider>

@@ -243,7 +243,10 @@ export interface ChatBuildWizardProps {
   /** Stop the build in the way, then plan this request again. */
   onStopBlocker?: () => void;
   onOpenBlocker?: () => void;
+  /** Open the build's full report, on its task's page. */
   onOpenReview?: () => void;
+  /** Open the build's plan beside the chat. */
+  onOpenPlan?: () => void;
   /** The conversation this build belongs to, for recovery direction sent from the card. */
   threadId?: string;
   /** After a recovery action from the card, so the chat catches up. */
@@ -261,7 +264,7 @@ function refusalOptions(actions: readonly RefusalAction[], props: ChatBuildWizar
   return actions.flatMap((action): Option[] => {
     switch (action) {
       case 'ask_orchestrator': return [{ label: 'Tell the Orchestrator what to do', hint: 'Answer in the message box.', onSelect: () => props.onReply(), tone: 'primary' }];
-      case 'open_plan': return props.onOpenReview ? [{ label: 'Open the plan', hint: 'Read it in the Build review tab.', onSelect: props.onOpenReview }] : [];
+      case 'open_plan': return props.onOpenPlan ? [{ label: 'Open the plan', hint: 'Read it beside the chat.', onSelect: props.onOpenPlan }] : [];
       case 'retry': return props.onStartPlan ? [{ label: 'Try again', hint: 'Start the plan again.', onSelect: props.onStartPlan }] : [];
       case 'stop_plan': return props.canStop ? [stopOption('Stop plan', 'No code has changed. The plan is dropped.')] : [];
     }
@@ -329,10 +332,11 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
             <p className="font-medium">The Orchestrator fixed the plan before it could start (v{props.correction.planVersion}). What changed:</p>
             <ul className="list-disc space-y-0.5 pl-4 text-content-secondary">{props.correction.changes.map(line => <li key={line}>{line}</li>)}</ul>
           </div>}
-          <p className="text-xs text-content-secondary">{props.canStart ? 'Read the saved plan on the right, then start it, or say what to change.' : 'Your workspace role cannot start builds.'}</p>
+          <p className="text-xs text-content-secondary">{props.canStart ? 'Open the plan to read it, then start it, or say what to change.' : 'Your workspace role cannot start builds.'}</p>
         </>;
         options = [
           ...(props.canStart && props.onStartPlan ? [{ label: 'Start plan', hint: 'The agents begin the planned work.', onSelect: props.onStartPlan, tone: 'primary' as const, busy: busy === 'start' }] : []),
+          ...(props.onOpenPlan ? [{ label: 'Open the plan', hint: 'Read it beside the chat.', onSelect: props.onOpenPlan }] : []),
           { label: 'Ask for changes', hint: 'Say what to change in the message box.', onSelect: () => props.onReply('Please change: ') },
           ...(props.canStop ? [stopOption('Stop plan', 'No code has changed. The plan is dropped.')] : [])
         ];
@@ -436,7 +440,7 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
           className="inline-flex items-center gap-1 rounded-lg border border-status-danger-border px-2 py-1 text-[11px] font-medium text-status-danger hover:bg-status-danger-subtle disabled:opacity-50">
           {headerStop.busy ? <LoaderCircle className="h-3 w-3 animate-spin" /> : <Square className="h-3 w-3 fill-current" />}{headerStop.label}
         </button>}
-        {build && <button type="button" onClick={props.onOpenReview} aria-label="Show Build review tab" title="Show Build review tab" className="rounded-lg p-1 text-content-secondary hover:bg-surface-high hover:text-content"><ExternalLink className="h-3.5 w-3.5" /></button>}
+        {build && <button type="button" onClick={props.onOpenReview} aria-label="Open the full build report" title="Open the full build report" className="rounded-lg p-1 text-content-secondary hover:bg-surface-high hover:text-content"><ExternalLink className="h-3.5 w-3.5" /></button>}
         {hasDetails && <button type="button" onClick={() => setCollapsed(value => !value)} aria-expanded={!collapsed} aria-label={collapsed ? 'Show build details' : 'Hide build details'} className="rounded-lg p-1 text-content-secondary hover:bg-surface-high hover:text-content"><ChevronDown className={'h-4 w-4 transition-transform ' + (collapsed ? '' : 'rotate-180')} /></button>}
         {failed && <button type="button" onClick={props.onDismiss} aria-label="Dismiss" title="Dismiss" className="rounded-lg p-1 text-content-secondary hover:bg-surface-high hover:text-content"><X className="h-3.5 w-3.5" /></button>}
       </span>

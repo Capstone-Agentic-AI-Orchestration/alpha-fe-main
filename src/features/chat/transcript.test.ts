@@ -13,6 +13,8 @@ describe('steps in the conversation', () => {
       .toMatchObject({ verb: 'Ran the test check' });
     expect(stepFor(activity('3', 'tool', 'Used mcp__alpha-task-files__project_list_repositories', { detail: '{}' })))
       .toMatchObject({ verb: 'Listed the codebases' });
+    expect(stepFor(activity('3', 'tool', 'Used mcp__alpha-task-files__project_submit_work', { detail: '{"report":{}}' })))
+      .toMatchObject({ verb: 'Handed in the work' });
     expect(stepFor(activity('4', 'tool', 'Ran command: status'))).toMatchObject({ verb: 'Ran', target: 'status' });
     expect(stepFor(activity('5', 'tool', 'Reading project files', { paths: ['src/a.ts', 'src/b.ts'] })))
       .toMatchObject({ verb: 'Read', target: 'src/a.ts', extra: 'and 1 more' });
