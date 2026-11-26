@@ -22,7 +22,7 @@ const build = (status: ProjectLiveBuild['status'], stoppedReason?: string): Proj
 const noop = () => undefined;
 const render = (overrides: Partial<ChatBuildWizardProps>) => renderToStaticMarkup(<ChatBuildWizard
   projectId="p1" build={null} failure={null} canStart canApprove canStop busy={null} error={null}
-  onStop={noop} onContinue={noop} onReply={noop} onRetry={noop} onDismiss={noop} onOpenReview={noop}
+  onStop={noop} onContinue={noop} onReply={noop} onRetry={noop} onDismiss={noop} onOpenReview={noop} onOpenPlan={noop}
   {...overrides} />);
 
 describe('the build panel above the message box', () => {
@@ -93,7 +93,7 @@ describe('the build panel above the message box', () => {
       refusal: { message: 'This plan cannot start yet: No task is assigned to selected repository acme/api.', actions: ['ask_orchestrator', 'open_plan', 'stop_plan'] } });
     expect(html).toContain('This plan cannot start yet: No task is assigned to selected repository acme/api.');
     expect(html).toContain('>Tell the Orchestrator what to do<');
-    expect(html).toContain('>Open the plan<');
+    expect(html.match(/>Open the plan</g)).toHaveLength(1);
     expect(html.match(/>Stop plan</g)).toHaveLength(1);
     expect(html).not.toContain('API Error');
   });

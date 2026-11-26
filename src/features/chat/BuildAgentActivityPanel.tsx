@@ -149,7 +149,7 @@ export const BuildAgentActivityPanel: React.FC<{
       </div>}
 
       <footer className="border-t border-divider px-5 py-3">
-        <button type="button" onClick={onOpenReview} className="inline-flex items-center gap-1.5 text-[11px] font-medium text-link hover:text-link-hover"><Radio className="h-3.5 w-3.5" />Show Build review tab</button>
+        <button type="button" onClick={onOpenReview} className="inline-flex items-center gap-1.5 text-[11px] font-medium text-link hover:text-link-hover"><Radio className="h-3.5 w-3.5" />Open the full build report</button>
       </footer>
     </section>
   );
