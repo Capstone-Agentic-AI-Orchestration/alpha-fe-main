@@ -12,7 +12,7 @@ import { ClientConversations, ClientDocuments, ClientOverview, ClientProjects, C
 import type { TicketDocumentsReadApi } from './ticketDocuments';
 import { OPEN_INQUIRY_KEY, type OpenInquiry } from './PmInquiriesPage';
 import { PmClientConversationTab, PmRequestConversation, clientIdFromKey, type ConversationTaskDraft, type PmConversationFocus } from './PmClientConversation';
-import { LINKED_REQUEST_KEY, type LinkedRequestDraft } from './requestTaskLink';
+import { LINKED_REQUEST_KEY, PROJECT_LOCKED_KEY, type LinkedRequestDraft } from './requestTaskLink';
 import { CLIENTS_CONVERSATION_FOCUS_KEY } from './TaskClientRequest';
 
 export type ClientSection = 'overview' | 'conversation' | 'tickets' | 'conversations' | 'documents' | 'proposals' | 'projects' | 'access';
@@ -103,8 +103,10 @@ export function PmClientsPage() {
     conversationFocus={conversationFocus} onConversationFocusHandled={() => setConversationFocus(null)}
     onCreateTask={draft => {
       // Fill the New task dialog for this project and remember which request the task is for.
+      // Both come from where the PM clicked, so the dialog shows them instead of asking again.
       const linked: LinkedRequestDraft | null = draft.request ? { ...draft.request, source: 'conversation' } : null;
       setTabSessionState(activeTabId, 'issueModal.project', draft.projectId);
+      setTabSessionState(activeTabId, PROJECT_LOCKED_KEY, true);
       setTabSessionState(activeTabId, 'issueModal.title', draft.title);
       setTabSessionState(activeTabId, 'issueModal.description', draft.description);
       setTabSessionState(activeTabId, LINKED_REQUEST_KEY, linked);

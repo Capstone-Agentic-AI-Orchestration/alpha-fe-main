@@ -3,7 +3,10 @@ import { pmTicketApi } from './pmApi';
 
 /** The New task dialog's tab-session key for the client request a new task is for. */
 export const LINKED_REQUEST_KEY = 'issueModal.linkedRequest';
-export interface LinkedRequestDraft { ticketId: string; title: string; source: 'conversation' | 'task_dialog' }
+/** Draft link for a new task. From a conversation the request (and so the project) is fixed; from the dialog it is a choice. */
+export interface LinkedRequestDraft { ticketId: string; title: string; reference?: string; source: 'conversation' | 'task_dialog' }
+/** Set when the dialog opens from a project's conversation: the task's project is that project, not a choice. */
+export const PROJECT_LOCKED_KEY = 'issueModal.projectLocked';
 
 /** Fired after a task is linked to a request, so an open conversation refreshes. */
 export const REQUEST_TASK_LINKED_EVENT = 'alpha:request-task-linked';

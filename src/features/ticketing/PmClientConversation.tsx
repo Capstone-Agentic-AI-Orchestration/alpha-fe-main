@@ -28,7 +28,7 @@ export interface PmConversationFocus { projectId?: string | null; ticketId?: str
 
 /** What the New task dialog opens with when a task is made from the conversation. */
 export interface ConversationTaskDraft {
-  projectId: string; title: string; description: string; request: { ticketId: string; title: string } | null;
+  projectId: string; title: string; description: string; request: { ticketId: string; title: string; reference?: string } | null;
 }
 
 /** How a PM reply about a request is sent: an ordinary reply, or a question the client must answer. */
@@ -118,7 +118,7 @@ function stageCardText(summary: StageSummary): { title: string; prompt: string |
 }
 
 /** Only a client's request gets "Create task"; ordinary messages do not. */
-function requestCardActions(onCreate: ((request: { ticketId: string; title: string }, description: string) => void) | undefined) {
+function requestCardActions(onCreate: ((request: { ticketId: string; title: string; reference?: string }, description: string) => void) | undefined) {
   if (!onCreate) return undefined;
   return (item: ConversationItem): ReactNode => {
     const request = item.kind === 'request' ? item.request : null;
@@ -210,9 +210,10 @@ export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTi
   useEffect(() => { setReplyKind('reply'); }, [selectedTicketId]);
 
   /** Open the New task dialog for this project, filled from a request and linked to it. */
-  const createTask = (request: { ticketId: string; title: string }, description: string) => {
+  const createTask = (request: { ticketId: string; title: string; reference?: string }, description: string) => {
     if (!projectId || !onCreateTask) return;
-    onCreateTask({ projectId, title: request.title.slice(0, 160), description, request: { ticketId: request.ticketId, title: request.title } });
+    onCreateTask({ projectId, title: request.title.slice(0, 160), description,
+      request: { ticketId: request.ticketId, title: request.title, reference: request.reference } });
   };
 
   const run = async (work: () => Promise<unknown>, fallback: string) => {
@@ -365,7 +366,8 @@ export function PmRequestConversation({ api = pmTicketApi, projectId, clientId, 
     }).catch(error_ => setActionError(errorText(error_, 'The message was not sent.'))).finally(() => setBusy(false));
   };
   const createTask = onCreateTask
-    ? (request: { ticketId: string; title: string }, description: string) => onCreateTask({ projectId, title: request.title.slice(0, 160), description, request })
+    ? (request: { ticketId: string; title: string; reference?: string }, description: string) => onCreateTask({ projectId, title: request.title.slice(0, 160), description,
+      request: { ticketId: request.ticketId, title: request.title, reference: request.reference } })
     : undefined;
 
   return <ProjectConversationChat role="pm" items={items} requests={requests} error={error} actionError={actionError}

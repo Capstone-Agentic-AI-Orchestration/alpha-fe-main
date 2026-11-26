@@ -8,7 +8,7 @@ import { Modal } from '@/shared/components/Modal';
 import { TASK_PRIORITIES, TASK_STATUSES } from './taskFlow';
 import { DatePicker } from '@/shared/components/ui/date-picker';
 import { pmTicketApi, type PmOpenRequest } from '@/features/ticketing/pmApi';
-import { LINKED_REQUEST_KEY, linkSavedTaskToRequest, type LinkedRequestDraft } from '@/features/ticketing/requestTaskLink';
+import { LINKED_REQUEST_KEY, PROJECT_LOCKED_KEY, linkSavedTaskToRequest, type LinkedRequestDraft } from '@/features/ticketing/requestTaskLink';
 
 interface CreateIssueModalProps {
   isOpen: boolean;
@@ -57,6 +57,9 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
   const [newSubtask, setNewSubtask] = useTabSessionState<string>('issueModal.newSubtask', '');
   // The client request this task is for, chosen here or set by "Create task" in a client conversation.
   const [linkedRequest, setLinkedRequest] = useTabSessionState<LinkedRequestDraft | null>(LINKED_REQUEST_KEY, null);
+  // Opened from a project's conversation: the project is fixed, and a request from there fixes the link too.
+  const [projectLocked, setProjectLocked] = useTabSessionState<boolean>(PROJECT_LOCKED_KEY, false);
+  const requestFixed = linkedRequest?.source === 'conversation';
   const [openRequests, setOpenRequests] = useState<PmOpenRequest[] | null>(null);
   const canLinkRequests = (visibleTabs ?? []).includes('clients');
   const [suggestingSteps, setSuggestingSteps] = useState(false);
@@ -108,7 +111,7 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
   if (!isOpen) return null;
 
   const activeProject = projects.find(project => project.id === selectedProjectId) || projects[0];
-  const showProjectSelect = !initialProjectId && projects.length > 1;
+  const showProjectSelect = !initialProjectId && !projectLocked && !requestFixed && projects.length > 1;
   const kept = subtasks.filter(subtask => subtask.keep);
   // Building is entered only by the explicit Orchestrator run command. A
   // stale tab-session value must not let an old draft create a task in it.
@@ -122,6 +125,7 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
 
   const reset = () => {
     setLinkedRequest(null);
+    setProjectLocked(false);
     setTitle('');
     setDescription('');
     setDueDate('');
@@ -223,7 +227,7 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
   };
 
   // A request link is for this one task: closing without creating forgets it.
-  const dismiss = () => { setLinkedRequest(null); onClose(); };
+  const dismiss = () => { setLinkedRequest(null); setProjectLocked(false); onClose(); };
 
   const onKeyDown = (event: React.KeyboardEvent) => {
     if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
@@ -300,7 +304,7 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
           {showProjectSelect && (
             <label className="min-w-0 flex-1 space-y-1.5">
               <span className="block text-[11.5px] font-medium text-content-secondary">Project</span>
-              <select value={activeProject?.id ?? ''} disabled={suggestingSteps} onChange={event => { setSelectedProjectId(event.target.value); setStepProposal(null); setSelectedSteps(new Set()); setStepSuggestionError(''); }} className={fieldClass}>
+              <select value={activeProject?.id ?? ''} disabled={suggestingSteps} onChange={event => { setSelectedProjectId(event.target.value); setLinkedRequest(null); setStepProposal(null); setSelectedSteps(new Set()); setStepSuggestionError(''); }} className={fieldClass}>
                 {projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
               </select>
             </label>
@@ -387,7 +391,16 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
               </label>
             </div>
 
-            {canLinkRequests && (linkedRequest || (openRequests && openRequests.length > 0)) && <label className="block space-y-1.5">
+            {canLinkRequests && requestFixed && linkedRequest && <div className="space-y-1">
+              <span className="block text-[11.5px] text-content-muted">Client request</span>
+              <p className="truncate text-[13px] text-content">
+                {linkedRequest.reference && <span className="mr-1.5 font-mono text-[12px] text-content-secondary">{linkedRequest.reference}</span>}
+                {linkedRequest.title}
+              </p>
+              <span className="block text-[11.5px] text-content-muted">The client follows this task’s progress on their request.</span>
+            </div>}
+
+            {canLinkRequests && !requestFixed && (linkedRequest || (openRequests && openRequests.length > 0)) && <label className="block space-y-1.5">
               <span className="block text-[11.5px] text-content-muted">Client request <span className="text-content-muted">Optional</span></span>
               <select value={linkedRequest?.ticketId ?? ''} className={fieldClass}
                 onChange={event => {
@@ -401,7 +414,7 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
                   {item.title}{item.clientName ? ` · ${item.clientName}` : ''}
                 </option>)}
               </select>
-              <span className="block text-[11.5px] text-content-muted">The client sees this task’s progress on their request.</span>
+              <span className="block text-[11.5px] text-content-muted">Link it when the client asked for this work: they follow the task’s progress on their request.</span>
             </label>}
 
             <fieldset>
