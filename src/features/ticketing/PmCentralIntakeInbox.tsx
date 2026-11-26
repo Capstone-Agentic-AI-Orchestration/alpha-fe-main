@@ -106,8 +106,8 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
   const selected = items.find(item => item.id === selectedId) ?? null;
   const selectedClarificationMessages = selected?.clarificationMessages ?? [];
   const selectedContact = selected ? inquiryContact(selected) : null;
-  const descriptionHeading = selected?.kind !== 'project_proposal' ? 'What they need'
-    : filter === 'pending' ? 'Discovery' : 'What the client wants';
+  const proposalHeading = filter === 'pending' ? 'Discovery' : 'What the client wants';
+  const descriptionHeading = selected?.kind === 'project_proposal' ? proposalHeading : 'What they need';
   /** Which one thing the decision area shows for a pending inquiry. */
   const decisionMode = ((): 'waiting' | 'ask' | 'decline' | 'existing' | 'choose' => {
     const proposal = selected?.kind === 'project_proposal';
