@@ -1444,6 +1444,8 @@ export type LiveBuildRecoveryAction =
   | 'provide_guidance'
   /** Apply the Orchestrator's verified fix that it held back for the person (a sensitive area). */
   | 'apply_proposed_fix'
+  /** Retire the tests the test guard asked for back, as obsolete, and retry the task without them. */
+  | 'retire_tests'
   | 'recheck_prerequisite'
   | 'plan_final_validation_corrections'
   | 'resume_checkpoint'
@@ -1471,6 +1473,8 @@ export interface LiveBuildRecoveryProjection {
   updatedAt: string;
   availableActions: LiveBuildRecoveryAction[];
   actionReasons: Partial<Record<LiveBuildRecoveryAction, string>>;
+  /** The tests the task stopped over, per file, which `retire_tests` retires (when it is offered). */
+  retirableTests?: Array<{ path: string; titles: string[] }>;
   /** The Orchestrator is looking into this stop now; the person need not act yet. */
   resolving?: boolean;
   /** What the Orchestrator found when it looked into this stop. Team only. */

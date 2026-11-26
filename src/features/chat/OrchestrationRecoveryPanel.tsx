@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import {
   AlertTriangle,
+  Archive,
   CheckCircle2,
   ClipboardCheck,
   Loader2,
@@ -39,6 +40,7 @@ const actionMeta: Record<LiveBuildRecoveryAction, { label: string; icon: React.R
   retry_report_format: { label: 'Retry report format', icon: <ClipboardCheck className="h-3.5 w-3.5" />, tone: 'border-status-info-border bg-status-info-subtle text-status-info hover:bg-status-info-subtle' },
   repair_and_continue: { label: 'Retry failed step', icon: <Wrench className="h-3.5 w-3.5" />, tone: 'border-divider bg-selected text-selected-content hover:bg-selected' },
   apply_proposed_fix: { label: 'Apply this fix', icon: <CheckCircle2 className="h-3.5 w-3.5" />, tone: 'border-transparent bg-action text-on-action hover:bg-action-hover' },
+  retire_tests: { label: 'Retire tests', icon: <Archive className="h-3.5 w-3.5" />, tone: 'border-divider text-content hover:bg-surface-high' },
   provide_guidance: { label: 'Provide direction', icon: <MessageSquareText className="h-3.5 w-3.5" />, tone: 'border-divider bg-selected text-selected-content hover:bg-selected' },
   recheck_prerequisite: { label: 'Recheck and resume', icon: <RefreshCw className="h-3.5 w-3.5" />, tone: 'border-status-info-border bg-status-info-subtle text-status-info hover:bg-status-info-subtle' },
   plan_final_validation_corrections: { label: 'Fix failed checks', icon: <Wrench className="h-3.5 w-3.5" />, tone: 'border-divider bg-selected text-selected-content hover:bg-selected' },
@@ -128,6 +130,7 @@ export const OrchestrationRecoveryPanel: React.FC<OrchestrationRecoveryPanelProp
   const [guidance, setGuidance] = useState('');
   const [showGuidance, setShowGuidance] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [confirmRetire, setConfirmRetire] = useState(false);
   const [busyAction, setBusyAction] = useState<LiveBuildRecoveryAction | null>(null);
   const [message, setMessage] = useState('');
   const [explanation, setExplanation] = useState('');
@@ -144,11 +147,14 @@ export const OrchestrationRecoveryPanel: React.FC<OrchestrationRecoveryPanelProp
     ?? recovery.actionReasons.repair_and_continue
     ?? recovery.actionReasons.resume_checkpoint;
   const resolving = recovery.resolving === true;
-  const actions = (['explain_failure', 'retry_report_format', 'repair_and_continue', 'apply_proposed_fix', 'provide_guidance', 'recheck_prerequisite',
+  const retirable = recovery.retirableTests ?? [];
+  const retireCount = retirable.reduce((total, item) => total + item.titles.length, 0);
+  const actions = (['explain_failure', 'retry_report_format', 'repair_and_continue', 'apply_proposed_fix', 'provide_guidance', 'retire_tests', 'recheck_prerequisite',
     'plan_final_validation_corrections', 'resume_checkpoint', 'review_saved_changes', 'keep_paused', 'cancel_build'] as LiveBuildRecoveryAction[])
     .filter(action => available.has(action) &&
       (canControl || action === 'explain_failure' || action === 'review_saved_changes') &&
-      (action !== 'review_saved_changes' || Boolean(onOpenReview)));
+      (action !== 'review_saved_changes' || Boolean(onOpenReview)) &&
+      (action !== 'retire_tests' || retireCount > 0));
   const phaseLabel = resolving ? 'Alpha is resolving this' : recoveryPhaseLabel(recovery);
   const recoveryUsage = recovery.category === 'project_code' && recovery.taskTitle
     ? `${Math.min(2, Math.max(0, recovery.attemptsUsed - 1))} of 2 automatic repairs used${recovery.attemptsUsed > 3 ? ` · ${recovery.attemptsUsed - 3} guided retry used` : ''}`
@@ -183,6 +189,7 @@ export const OrchestrationRecoveryPanel: React.FC<OrchestrationRecoveryPanelProp
         setShowGuidance(false);
       }
       if (action === 'cancel_build') setConfirmCancel(false);
+      if (action === 'retire_tests') setConfirmRetire(false);
       await onActionComplete?.(result.state);
       if (action === 'review_saved_changes') onOpenReview?.();
     } catch (caught: any) {
@@ -220,11 +227,18 @@ export const OrchestrationRecoveryPanel: React.FC<OrchestrationRecoveryPanelProp
         {error && <p role="alert" className="mt-2 text-[10px] leading-4 text-status-danger">{error}</p>}
         {actions.length > 0 && <div className="mt-3 flex flex-wrap gap-2">
           {actions.map(action => {
-            if (action === 'provide_guidance' && !showGuidance) return <button key={action} type="button" onClick={() => { setShowGuidance(true); setConfirmCancel(false); }} disabled={Boolean(busyAction)} className={`inline-flex min-h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[10px] font-semibold transition disabled:opacity-50 ${actionMeta[action].tone}`}>
+            if (action === 'provide_guidance' && !showGuidance) return <button key={action} type="button" onClick={() => { setShowGuidance(true); setConfirmCancel(false); setConfirmRetire(false); }} disabled={Boolean(busyAction)} className={`inline-flex min-h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[10px] font-semibold transition disabled:opacity-50 ${actionMeta[action].tone}`}>
               {actionMeta[action].icon}{actionMeta[action].label}
             </button>;
-            if (action === 'cancel_build' && !confirmCancel) return <button key={action} type="button" onClick={() => { setConfirmCancel(true); setShowGuidance(false); }} disabled={Boolean(busyAction)} className={`inline-flex min-h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[10px] font-semibold transition disabled:opacity-50 ${actionMeta[action].tone}`}>
+            if (action === 'cancel_build' && !confirmCancel) return <button key={action} type="button" onClick={() => { setConfirmCancel(true); setShowGuidance(false); setConfirmRetire(false); }} disabled={Boolean(busyAction)} className={`inline-flex min-h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[10px] font-semibold transition disabled:opacity-50 ${actionMeta[action].tone}`}>
               {actionMeta[action].icon}{actionMeta[action].label}
+            </button>;
+            // Retiring asks first, with the exact tests listed below; the button then confirms it.
+            if (action === 'retire_tests') return <button key={action} type="button" aria-expanded={confirmRetire}
+              onClick={() => { if (confirmRetire) void retryAction(action); else { setConfirmRetire(true); setConfirmCancel(false); setShowGuidance(false); } }}
+              disabled={Boolean(busyAction)} className={`inline-flex min-h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[10px] font-semibold transition disabled:cursor-wait disabled:opacity-50 ${actionMeta[action].tone}`}>
+              {busyAction === action ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : actionMeta[action].icon}
+              {confirmRetire ? `Retire ${retireCount === 1 ? 'this test' : `these ${retireCount} tests`} and retry` : actionMeta[action].label}
             </button>;
             if (action === 'provide_guidance' || action === 'cancel_build') return <button key={action} type="button" onClick={() => void retryAction(action)} disabled={Boolean(busyAction) || (action === 'provide_guidance' && !guidance.trim())} className={`inline-flex min-h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[10px] font-semibold transition disabled:cursor-wait disabled:opacity-50 ${actionMeta[action].tone}`}>
               {busyAction === action ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : action === 'provide_guidance' ? <ShieldCheck className="h-3.5 w-3.5" /> : <Square className="h-3 w-3" />}
@@ -240,6 +254,16 @@ export const OrchestrationRecoveryPanel: React.FC<OrchestrationRecoveryPanelProp
           <textarea id={`recovery-guidance-${recovery.id}`} value={guidance} onChange={event => setGuidance(event.target.value.slice(0, 2_000))} maxLength={2_000} rows={3} placeholder="Describe the correction. Alpha keeps the original task and file boundaries." className="w-full resize-y rounded-lg border border-control bg-well px-3 py-2 text-[11px] leading-5 text-content placeholder:text-content-muted outline-none focus:border-control focus:ring-2 focus:ring-focus" />
           <div className="flex flex-wrap items-center justify-between gap-3 text-[9px] text-content-muted"><span>Guidance cannot expand the approved task scope. Avoid passwords or access tokens.</span><span>{guidance.length}/2,000</span></div>
           <button type="button" onClick={() => { setShowGuidance(false); setGuidance(''); setError(''); }} className="text-[10px] text-content-muted hover:text-content-secondary">Clear direction</button>
+        </div>}
+        {confirmRetire && retireCount > 0 && <div aria-label="Tests to retire" className="mt-3 space-y-2 text-[11px] leading-5">
+          <p className="text-content-secondary">Retire only tests that no longer fit what this build is making. The specialist may remove or rewrite them, and every other test stays protected.</p>
+          <ul className="space-y-1.5">
+            {retirable.map(item => <li key={item.path}>
+              <p className="break-all font-mono text-[10px] text-content-muted">{item.path}</p>
+              <ul className="mt-0.5 list-disc space-y-0.5 pl-4 text-content">{item.titles.map((title, index) => <li key={`${title}-${index}`} className="break-words">{title}</li>)}</ul>
+            </li>)}
+          </ul>
+          <button type="button" onClick={() => setConfirmRetire(false)} className="text-[10px] text-content-muted hover:text-content-secondary">Keep these tests</button>
         </div>}
         {confirmCancel && <div className="mt-2 flex flex-wrap items-center gap-2"><p role="alert" className="mr-auto text-[10px] text-status-danger">Alpha will stop this build and preserve its saved work.</p><button type="button" onClick={() => setConfirmCancel(false)} className="min-h-8 rounded-lg px-2.5 text-[10px] text-content-secondary hover:text-content">Keep build</button></div>}
       </div>
