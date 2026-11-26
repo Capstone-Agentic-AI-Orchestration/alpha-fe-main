@@ -8,7 +8,7 @@ import { clientTicketApi } from './clientApi';
 import { CxActionCard, CxBadge, CxEmpty, CxOrbit, CxPageHeader, CxPanel, CxStats } from './clientKit';
 import { ClientPreviewThumb } from './ClientPreviewThumb';
 import { ClientProjectShowcase } from './ClientProjectShowcase';
-import { clientGreeting, clientNextStep, clientRequestGroup, listProgressIndex, relativeTime } from './clientFriendly';
+import { clientDisplayName, clientGreeting, clientNextStep, clientRequestGroup, listProgressIndex, relativeTime } from './clientFriendly';
 import { time } from './ticketUi';
 import { clientProjectKey } from './ClientProjectSections';
 
@@ -43,7 +43,7 @@ export function ClientOverviewPage({ clientName, requests, projects, requestsLoa
 }) {
   const items = requests?.items ?? [];
   const attention = items.filter(item => clientRequestGroup(item) === 'needs_you');
-  const firstName = clientName?.trim().split(/\s+/)[0] ?? '';
+  const firstName = clientDisplayName(clientName).split(' ')[0];
   const shownProjects = [...projects].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)).slice(0, 4);
   const [selectedProjectKey, setSelectedProjectKey] = useState('');
   const selectedProject = shownProjects.find(project => clientProjectKey(project) === selectedProjectKey) ?? shownProjects[0] ?? null;

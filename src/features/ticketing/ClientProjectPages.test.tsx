@@ -24,6 +24,18 @@ describe('client overview loading', () => {
     expect(ready).not.toContain('No projects yet');
   });
 
+  it('greets the client by first name, and without a name rather than by email', () => {
+    const heading = (clientName?: string) => {
+      const html = renderToStaticMarkup(<ClientOverviewPage clientName={clientName} requests={empty} requestsLoading={false}
+        requestsError="" projects={[]} projectsLoading={false} projectsError="" {...callbacks} />);
+      return html.match(/<h1 id="client-overview-title">(.*?)<\/h1>/)?.[1].replace(/<[^>]+>/g, '');
+    };
+    expect(heading('Maria  Santos')).toMatch(/^Good (morning|afternoon|evening), Maria$/);
+    expect(heading('maria@example.test')).toMatch(/^Good (morning|afternoon|evening)$/);
+    expect(heading('')).toMatch(/^Good (morning|afternoon|evening)$/);
+    expect(heading()).toMatch(/^Good (morning|afternoon|evening)$/);
+  });
+
   it('leads with the banner and what needs the client, then features a project and its own updates', () => {
     const base = { reference: 'REF-1', createdAt: '2026-11-01T00:00:00Z', updatedAt: '2026-11-01T00:00:00Z', closedAt: null,
       readOnly: false, writesAvailable: true, workspaceId: 'w1', projectId: 'p1', projectName: 'Shop', projectLinkStatus: 'linked' as const,

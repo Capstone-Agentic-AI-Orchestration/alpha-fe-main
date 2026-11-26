@@ -18,7 +18,7 @@ import { ClientNotificationBell, projectProposalPortalUpdate, type ClientPortalU
 import { ClientAccessPanel } from './ClientAccessPanel';
 import { ClientPasswordSignIn } from './ClientPasswordSignIn';
 import { clientTicketProgress } from './clientTicketProgress';
-import { CLIENT_REQUEST_GROUPS, CLIENT_STEP_GUIDE, clientRequestGroup } from './clientFriendly';
+import { CLIENT_REQUEST_GROUPS, CLIENT_STEP_GUIDE, clientDisplayName, clientRequestGroup } from './clientFriendly';
 import { effectivePortalFilter, portalFilterFromHash } from './clientPortalLink';
 import { ClientOverviewPage, ClientProjectsPage, clientProjectKey } from './ClientProjectPages';
 import { ClientProposalsPage } from './ClientProposalsPage';
@@ -705,8 +705,11 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   const proposalsNeedingReply = (projectProposals ?? []).filter(proposal => proposal.status === 'awaiting_client').length;
   const proposeProject = inspectionOnly ? undefined : () => { setProposeRequestTab(activeTabId); navigate('proposals'); };
   const clientEmail = session?.email?.trim() ?? '';
-  const clientName = session?.fullName?.trim() || 'Client';
-  const clientInitials = clientName.split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
+  const accountName = clientDisplayName(session?.fullName, clientEmail);
+  const clientName = accountName || 'Client';
+  const clientInitials = accountName
+    ? accountName.split(' ').slice(0, 2).map(part => part[0]).join('').toUpperCase()
+    : (clientEmail[0] ?? 'C').toUpperCase();
   let projectRequestForm: ReactNode;
   if (startConversationRequest && conversationProject) {
     const formMatchesProject = createContext && createProject
@@ -803,7 +806,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
         {pageError && <p role="alert" className="cx-error cx-notice"><AlertCircle size={14} aria-hidden="true" /> {pageError}</p>}
         {refreshError && <p role="status" className="cx-error cx-notice">{refreshError}</p>}
 
-        {page === 'overview' && <ClientOverviewPage clientName={session?.fullName ?? ''} requests={displayQueue} projects={projects ?? []}
+        {page === 'overview' && <ClientOverviewPage clientName={accountName} requests={displayQueue} projects={projects ?? []}
           api={api} refreshToken={refreshVersion}
           requestsLoading={!queue && !queueError} requestsError={queueError} projectsLoading={!projects && !projectsError} projectsError={projectsError}
           onOpenRequest={item => openClientRequest(item, true)} onOpenProject={openProject} onGoToProjects={() => navigate('projects')}

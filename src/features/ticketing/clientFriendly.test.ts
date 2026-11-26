@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ClientProjectRequestItem } from './clientApi';
-import { clientGreeting, clientNextLine, clientNextStep, clientRequestGroup, clientWhatNext, dayLabel, listProgressIndex, relativeTime } from './clientFriendly';
+import { clientDisplayName, clientGreeting, clientNextLine, clientNextStep, clientRequestGroup, clientWhatNext, dayLabel, listProgressIndex, relativeTime } from './clientFriendly';
 
 const item = (overrides: Partial<ClientProjectRequestItem>): ClientProjectRequestItem => ({
   id: 'r1', reference: 'REF-1', title: 'Request', status: 'in_progress', createdAt: '2026-11-01T00:00:00Z',
@@ -20,6 +20,15 @@ describe('client friendly helpers', () => {
     expect(clientNextStep('agree_scope')).toEqual({ prompt: 'A plan is ready for you to approve', action: 'Review plan' });
     expect(clientNextStep('review_result')?.action).toBe('Check the result');
     expect(clientNextStep(null)).toBeNull();
+  });
+
+  it('uses the name the client gave, never their email', () => {
+    expect(clientDisplayName('  Maria   Santos ', 'maria@example.test')).toBe('Maria Santos');
+    expect(clientDisplayName('maria@example.test', 'maria@example.test')).toBe('');
+    expect(clientDisplayName('Someone@Example.test')).toBe('');
+    expect(clientDisplayName('MARIA', 'maria')).toBe('');
+    expect(clientDisplayName('', 'maria@example.test')).toBe('');
+    expect(clientDisplayName(undefined)).toBe('');
   });
 
   it('greets by time of day', () => {
