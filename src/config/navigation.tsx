@@ -115,6 +115,11 @@ export interface NavItem {
   /** Reader-friendly labels for the same destination. */
   labels?: Partial<Record<UserRole, string>>;
   /**
+   * False for a screen other screens open but the menus do not list: the sidebar, the
+   * new-tab picker and search leave it out, while roles that can reach it still open it.
+   */
+  inMenus?: false;
+  /**
    * The sidebar's current three-way grouping.
    *
    * Kept alongside `section` so single-sourcing the table changes no pixels.
@@ -142,10 +147,11 @@ export const NAV_ITEMS: NavItem[] = [
 
   { id: 'intake', label: 'New request', title: 'New Request', subtitle: 'Describe what you need in plain language', group: 'primary', section: 'requests', icon: PenLine },
 
-  // Inquiries are pre-project intake; tickets are requests that belong to a client's project conversation.
-  // The Inbox lists both, and where each client project is waiting, in one place for the project manager.
+  // The Inbox lists new inquiries, client requests and where each client project is waiting, in one
+  // place for the project manager. Inquiries is where one is answered: the Inbox, Needs your attention
+  // and Clients open it, so it is no longer a menu item of its own.
   { id: 'inbox', label: 'Inbox', title: 'Inbox', subtitle: 'Everything clients and prospects have asked for', group: 'workspace', section: 'requests', icon: Mail },
-  { id: 'inquiries', label: 'Inquiries', title: 'Inquiries', subtitle: 'Review requests that have not yet become a client project', group: 'workspace', section: 'requests', icon: Inbox },
+  { id: 'inquiries', label: 'Inquiries', title: 'Inquiries', subtitle: 'Review requests that have not yet become a client project', group: 'workspace', section: 'requests', icon: Inbox, inMenus: false },
   { id: 'clients', label: 'Clients', title: 'Clients', subtitle: 'Clients, their projects and requests', group: 'workspace', section: 'clients', icon: Users },
   { id: 'issues', label: 'Tasks', labels: { pm: 'All Tasks', admin: 'All Tasks' }, title: 'Tasks', subtitle: 'Assigned work across your projects', group: 'workspace', section: 'my_work', sectionByRole: { pm: 'projects', admin: 'projects' }, icon: CheckSquare },
   { id: 'projects', label: 'Projects', labels: { dev: 'Projects', pm: 'All Projects', admin: 'All Projects' }, title: 'Projects & Milestones', subtitle: 'Project roadmap & deliverable progress', group: 'workspace', section: 'my_work', sectionByRole: { pm: 'projects', admin: 'projects' }, icon: FolderKanban },
@@ -245,6 +251,9 @@ const navFor = (desktopApp: boolean) => desktopApp === isDesktop ? ROLE_NAV : NA
 /** The view a role lands on, and falls back to when it opens one it may not. */
 export const landingTab = (role: UserRole, desktopApp: boolean = isDesktop): NavigationTab => navFor(desktopApp)[role][0];
 
+/** Whether menus list this destination (see NavItem.inMenus). */
+export const listedInMenus = (item: NavItem): boolean => item.inMenus !== false;
+
 /** A role's destinations, grouped for the sidebar, empty sections dropped. */
 export function sectionsFor(role: UserRole, desktopApp: boolean = isDesktop): Array<{ section: NavSection; items: NavItem[] }> {
   const allowed = new Set(navFor(desktopApp)[role]);
@@ -256,7 +265,7 @@ export function sectionsFor(role: UserRole, desktopApp: boolean = isDesktop): Ar
       return {
         section: { ...section, label: section.labels?.[role] ?? section.label },
         items: NAV_ITEMS.filter(item =>
-          allowed.has(item.id) && (item.sectionByRole?.[role] ?? item.section) === sectionId
+          allowed.has(item.id) && listedInMenus(item) && (item.sectionByRole?.[role] ?? item.section) === sectionId
         )
       };
     })

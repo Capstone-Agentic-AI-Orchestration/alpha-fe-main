@@ -515,15 +515,8 @@ const ROLE_CAPABILITIES = Object.fromEntries(KNOWN_ROLES.map(role => [role, role
  */
 const ROLE_TABS = ROLE_NAV;
 
-/** Extra fields for a chat message that starts a build. */
+/** What to do once the daemon has saved a new task. */
 export interface CreateIssueOptions {
-  /**
-   * Start an Orchestrator build once the daemon has saved the task.
-   *
-   * The task only has its real id and identifier after the save, and a build
-   * needs both, so this waits for the save rather than building the placeholder.
-   */
-  planBuild?: boolean;
   /** Called with the saved task, which has its real id and identifier. */
   onSaved?: (issue: Issue) => void;
 }
@@ -942,8 +935,6 @@ ${e.detail}`;
   const [issues, setIssues] = useState<Issue[]>(() => normalizeLegacyIssues(
     loadCachedBoard(loadFromStorage<string | null>('active_workspace_id', null)).state.issues
   ));
-  /** Saved tasks whose author asked for a build when creating them; see `CreateIssueOptions.planBuild`. */
-  const [issuesAwaitingBuild, setIssuesAwaitingBuild] = useState<string[]>([]);
   const [projects, setProjects] = useState<Project[]>(() =>
     loadCachedBoard(loadFromStorage<string | null>('active_workspace_id', null)).state.projects
   );
@@ -1989,7 +1980,6 @@ ${e.detail}`;
       saved => {
         if (saved.id !== newIssue.id) savedIssueIds.set(newIssue.id, saved.id);
         setIssues(prev => prev.map(i => (i.id === newIssue.id ? saved : i)));
-        if (options.planBuild) setIssuesAwaitingBuild(prev => [...prev, saved.id]);
         options.onSaved?.(saved);
       },
       msg => showToast('Task not saved', msg, 'error')
@@ -2900,22 +2890,6 @@ ${e.detail}`;
       return null;
     }
   };
-
-  /**
-   * Plan the builds asked for at creation, once each saved task is on the board.
-   *
-   * Runs here rather than in the dialog: the dialog has closed by the time the
-   * save returns, and only this render's `startIssueBuild` can see the saved task.
-   */
-  useEffect(() => {
-    if (!issuesAwaitingBuild.length) return;
-    const ready = issuesAwaitingBuild.filter(id => issues.some(issue => issue.id === id));
-    if (!ready.length) return;
-    setIssuesAwaitingBuild(prev => prev.filter(id => !ready.includes(id)));
-    for (const id of ready) {
-      void startIssueBuild(id);
-    }
-  }, [issuesAwaitingBuild, issues]);
 
   // Runtimes
   const scanLocalRuntimes = async () => {

@@ -176,7 +176,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const navButton = (tab: NavigationTab, compact: boolean, closeIfFloating: () => void) => {
-    const active = activeTab === tab;
+    // Inquiries opens from the Inbox and is not listed itself, so the Inbox stays marked there.
+    const active = activeTab === tab || (tab === 'inbox' && activeTab === 'inquiries');
     const label = labelFor(tab);
     const count = tab === 'attention' ? attention.items.length : 0;
     const button = (

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode, type RefObject } from 'react';
 import { CheckSquare, FolderKanban, MessageSquare } from 'lucide-react';
 import { useApp } from '@/app/AppContext';
-import { NAV_ITEMS, navIcon, navLabel } from '@/config/navigation';
+import { NAV_ITEMS, listedInMenus, navIcon, navLabel } from '@/config/navigation';
 import { byChatActivity, chatMatches } from '@/features/chat/chatDirectory';
 import { sidebarRow } from '@/features/chat/ProjectChatSidebar';
 import { fitEntries, LABEL_HEIGHT, ROW_HEIGHT, useFitHeight } from './useFitHeight';
@@ -31,7 +31,7 @@ export function useSidebarSearch(query: string, chatInSidebar: boolean): Sidebar
       Object.entries(state).forEach(([key, value]) => setTabSessionState(activeTabId, key, value));
       setActiveTab(view);
     };
-    const pages = NAV_ITEMS.filter(item => visibleTabs.includes(item.id) && !(chatInSidebar && item.id === 'chat')
+    const pages = NAV_ITEMS.filter(item => visibleTabs.includes(item.id) && listedInMenus(item) && !(chatInSidebar && item.id === 'chat')
       && includesAll(navLabel(item.id, role) + ' ' + item.title, query))
       .map((item): SidebarSearchResult => ({ id: 'page:' + item.id, group: 'Pages', label: navLabel(item.id, role),
         icon: navIcon(item.id, 'h-3.5 w-3.5'), run: () => open(item.id) }));

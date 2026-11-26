@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { RefreshCw } from 'lucide-react';
-import { NAV_ITEMS, navIcon, navLabel } from '@/config/navigation';
+import { NAV_ITEMS, listedInMenus, navIcon, navLabel } from '@/config/navigation';
 import { NoTeamAccess } from '@/features/onboarding/NoTeamAccess';
 import { GitHubSetup } from '@/features/onboarding/GitHubSetup';
 import { ProfilePicker } from '@/features/onboarding/ProfilePicker';
@@ -119,7 +119,7 @@ export const App: React.FC = () => {
     continueInLocalMode,
     showToast
   } = useApp();
-  const availableTabs = ALL_TABS.filter(t => visibleTabs.includes(t.id));
+  const availableTabs = ALL_TABS.filter(t => visibleTabs.includes(t.id) && listedInMenus(t));
   const [mountedTabIds, setMountedTabIds] = useState<Set<string>>(() => new Set([activeTabId]));
 
   useEffect(() => {
