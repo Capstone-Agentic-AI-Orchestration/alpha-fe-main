@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, RefreshCw } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { useApp, useTabSessionState } from '@/app/AppContext';
 import { Button } from '@/shared/components/ui/button';
 import { CreateProjectModal, type NewProjectInput } from '@/features/projects/CreateProjectModal';
@@ -94,16 +94,10 @@ export function PmInquiriesPage() {
   </div>;
 
   return <div className="pm-ticket-page pm-ticket-page--nested">
-    <nav aria-label="Inquiries actions" className="pm-ticket-page__tabs">
+    {visibleTabs.includes('inbox') && <nav aria-label="Inquiries actions" className="pm-ticket-page__tabs">
       {/* Not in the sidebar any more: the way back is to the Inbox that lists every inquiry. */}
-      {visibleTabs.includes('inbox') && <Button variant="ghost" size="sm" onClick={() => setActiveTab('inbox')}><ArrowLeft size={14} aria-hidden="true" />Back to Inbox</Button>}
-      <div className="pm-ticket-page__tab-actions">
-        <Button variant="ghost" size="sm" onClick={() => setRefreshToken(value => value + 1)}
-          aria-label="Refresh inquiries" title="Refresh inquiries">
-          <RefreshCw size={14} aria-hidden="true" /><span>Refresh</span>
-        </Button>
-      </div>
-    </nav>
+      <Button variant="ghost" size="sm" onClick={() => setActiveTab('inbox')}><ArrowLeft size={14} aria-hidden="true" />Back to Inbox</Button>
+    </nav>}
     <div className="pm-ticket-page__content">
       <PmCentralIntakeInbox
         workspaceId={activeWorkspace?.id ?? null}
