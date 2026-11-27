@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 import { apiService } from '@/shared/services/apiService';
+import type { MonorepoAppId } from '@/shared/types';
 import type {
   DeploymentLogLine,
   DeploymentLogsQuery,
@@ -51,9 +52,9 @@ const POLL_STOPPED_ERROR = 'Live logs stopped after repeated failures. Restart t
 type FetchPage = (query: DeploymentLogsQuery) => Promise<DeploymentLogsResponse>;
 
 /** One page of a hosted branch's logs, through Alpha's hosting route (the cloud answers, directly or relayed). */
-function fetcherFor(projectId: string, repo: string, branch: string): FetchPage {
+function fetcherFor(projectId: string, repo: string, branch: string, app?: MonorepoAppId): FetchPage {
   return async query =>
-    normalizeLogsResponse((await apiService.getRepoHostingLogs(projectId, repo, branch, query)) ?? {});
+    normalizeLogsResponse((await apiService.getRepoHostingLogs(projectId, repo, branch, query, app)) ?? {});
 }
 
 export type DeploymentLogsStatus = 'idle' | 'loading' | 'ready' | 'error';
@@ -156,6 +157,8 @@ function deriveOlder(state: LogState, current: boolean): OlderPageState {
 function readOptions(options: {
   projectId: string;
   repo: string;
+  /** Which app of a monorepo; absent for any other repository. */
+  app?: MonorepoAppId;
   branch: string;
   window: LogWindow | null;
   filters?: LogQueryFilters;
@@ -217,15 +220,17 @@ async function fillGap(fill: GapFill): Promise<void> {
 export function useHostingLogs(options: {
   projectId: string;
   repo: string;
+  /** Which app of a monorepo; absent for any other repository. */
+  app?: MonorepoAppId;
   branch: string;
   window: LogWindow | null;
   filters?: LogQueryFilters;
   /** False when there is nothing to show yet. */
   enabled?: boolean;
 }): DeploymentLogsViewModel {
-  const { projectId, repo, branch, window: logWindow } = options;
+  const { projectId, repo, app, branch, window: logWindow } = options;
   const { windowStart, windowEnd, type, on } = readOptions(options);
-  const fetchPage = useMemo(() => fetcherFor(projectId, repo, branch), [projectId, repo, branch]);
+  const fetchPage = useMemo(() => fetcherFor(projectId, repo, branch, app), [projectId, repo, branch, app]);
 
   const [errorsOnly, setErrorsOnly] = useState(false);
   const [search, setSearch] = useState('');
@@ -233,7 +238,7 @@ export function useHostingLogs(options: {
   const [nonce, setNonce] = useState(0);
   const visible = useDocumentVisible();
 
-  const key = JSON.stringify([projectId, repo, branch, windowStart, windowEnd, type, errorsOnly, text, nonce]);
+  const key = JSON.stringify([projectId, repo, app ?? null, branch, windowStart, windowEnd, type, errorsOnly, text, nonce]);
   const query = useMemo(() => logsQuery(type, errorsOnly, text), [type, errorsOnly, text]);
 
   const [state, setState] = useState<LogState>(() => initialLogState(key));

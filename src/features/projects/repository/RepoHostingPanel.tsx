@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { AlertTriangle, ExternalLink, Info, Loader2, Lock, Rocket } from 'lucide-react';
 
 import { apiService, parseApiError } from '@/shared/services/apiService';
-import { HostingStatus, PIPELINE_BRANCHES } from '@/shared/types';
+import { HostingStatus, MonorepoAppId, PIPELINE_BRANCHES } from '@/shared/types';
 import { CopyButton } from '@/shared/components/CopyButton';
 import { describeRepoError, humanize, relativeTime, RunTone, RUN_TONE_CLASS } from './repoFormat';
 import { RefreshButton, RepoSection, SectionError, SectionLoading } from './SectionState';
@@ -38,10 +38,33 @@ function deployTone(status: string): RunTone {
 interface RepoHostingPanelProps {
   projectId: string;
   repo: string;
+  /** Which app of a monorepo; absent for any other repository. */
+  app?: MonorepoAppId;
   /** Same permission as provisioning repositories; the server enforces it regardless. */
   canManage: boolean;
   onHostingChanged: () => void;
 }
+
+/** What this one is connected to: the other app of a monorepo, or the paired repository. */
+function partnerName(app: MonorepoAppId | undefined, partner: string | null | undefined): string {
+  if (app) return app === 'web' ? 'The backend app' : 'The frontend app';
+  return partner ?? 'The paired repository';
+}
+
+/** A monorepo's apps are connected to each other; any other repository to its partner, if it has one. */
+const PartnerNote: React.FC<{ data: HostingStatus }> = ({ data }) => {
+  if (data.app === 'web') return <>Connected to the backend in apps/api — this frontend calls it.</>;
+  if (data.app === 'api') return <>Connected to the frontend in apps/web — this backend accepts its requests.</>;
+  if (!data.partner) return <>Not connected to a partner repository.</>;
+  let relation = 'the two are paired.';
+  if (data.role === 'frontend') relation = 'this frontend calls that backend.';
+  if (data.role === 'backend') relation = 'this backend accepts requests from that frontend.';
+  return (
+    <>
+      Connected to <span className="font-mono text-content-secondary">{data.partner}</span> — {relation}
+    </>
+  );
+};
 
 /**
  * Where a repository's code actually runs: Render for backends, Vercel for
@@ -51,10 +74,10 @@ interface RepoHostingPanelProps {
  * variables" — Alpha sets some of them itself (`managedByAlpha`), the rest
  * come from the platform, and none of them are ever re-readable once secret.
  */
-export const RepoHostingPanel: React.FC<RepoHostingPanelProps> = ({ projectId, repo, canManage, onHostingChanged }) => {
+export const RepoHostingPanel: React.FC<RepoHostingPanelProps> = ({ projectId, repo, app, canManage, onHostingChanged }) => {
   const hosting = useRepoResource<HostingStatus>(
-    () => apiService.getRepoHosting(projectId, repo),
-    `${projectId}|${repo}|hosting`
+    () => apiService.getRepoHosting(projectId, repo, app),
+    `${projectId}|${repo}|${app ?? ''}|hosting`
   );
   const data = hosting.data;
 
@@ -65,12 +88,12 @@ export const RepoHostingPanel: React.FC<RepoHostingPanelProps> = ({ projectId, r
     setRunning(true);
     setActionError(null);
     try {
-      const result = await apiService.setUpRepoHosting(projectId, repo);
+      const result = await apiService.setUpRepoHosting(projectId, repo, app);
       // Only a set-up knows how wiring the partner went; a plain status read does not.
       const problems = [];
       if (result.partnerWiring && !result.partnerWiring.ok) {
         problems.push(
-          `${result.partner ?? 'The paired repository'} could not be updated with its URLs: ` +
+          `${partnerName(app, result.partner)} could not be updated with its URLs: ` +
             `${result.partnerWiring.error ?? 'unknown error'}. Retry to connect them.`
         );
       }
@@ -300,18 +323,7 @@ const HostingBody: React.FC<{
           <CiGateNote data={data} />
 
           <p className="px-3.5 py-2.5 text-[11px] leading-relaxed text-content-secondary">
-            {data.partner ? (
-              <>
-                Connected to <span className="font-mono text-content-secondary">{data.partner}</span> —{' '}
-                {data.role === 'frontend'
-                  ? 'this frontend calls that backend.'
-                  : data.role === 'backend'
-                  ? 'this backend accepts requests from that frontend.'
-                  : 'the two are paired.'}
-              </>
-            ) : (
-              'Not connected to a partner repository.'
-            )}
+            <PartnerNote data={data} />
           </p>
 
           {/* Variables are listed and edited in their own section (RepoEnvEditor). */}

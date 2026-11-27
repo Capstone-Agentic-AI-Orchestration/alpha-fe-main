@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { ClipboardPaste, KeyRound, Loader2, Lock, Plus, Trash2, X } from 'lucide-react';
 
 import { apiService } from '@/shared/services/apiService';
-import type { EnvChangeResult, HostingEnvList, PipelineBranch } from '@/shared/types';
+import type { EnvChangeResult, HostingEnvList, MonorepoAppId, PipelineBranch } from '@/shared/types';
 import { RepoHostingPanel } from './RepoHostingPanel';
 import { envKeyProblem, envRowsProblem, parseEnvText, type EnvRow } from './envRules';
 import { describeRepoError } from './repoFormat';
@@ -26,17 +26,22 @@ const inputClass =
 export const RepoEnvEditor: React.FC<{
   projectId: string;
   repo: string;
+  /** Which app of a monorepo; absent for any other repository. */
+  app?: MonorepoAppId;
   canManageMain: boolean;
   canManagePreview: boolean;
-}> = ({ projectId, repo, canManageMain, canManagePreview }) => {
-  const env = useRepoResource<HostingEnvList>(() => apiService.getRepoHostingEnv(projectId, repo), `${projectId}|${repo}|env`);
+}> = ({ projectId, repo, app, canManageMain, canManagePreview }) => {
+  const env = useRepoResource<HostingEnvList>(
+    () => apiService.getRepoHostingEnv(projectId, repo, app),
+    `${projectId}|${repo}|${app ?? ''}|env`
+  );
   const data = env.data;
   const [selected, setSelected] = useState<PipelineBranch>('uat');
   const environment = data?.environments.includes(selected) ? selected : data?.environments[0] ?? 'main';
   const canWrite = environment === 'main' ? canManageMain : canManagePreview;
 
   return <>
-    <RepoHostingPanel projectId={projectId} repo={repo} canManage={canManageMain} onHostingChanged={env.reload} />
+    <RepoHostingPanel projectId={projectId} repo={repo} app={app} canManage={canManageMain} onHostingChanged={env.reload} />
     <RepoSection
       id={`repo-env-${repo}`}
       title="Variables"
@@ -72,6 +77,7 @@ export const RepoEnvEditor: React.FC<{
             key={environment}
             projectId={projectId}
             repo={repo}
+            app={app}
             environment={environment}
             data={data}
             canWrite={canWrite}
@@ -86,11 +92,12 @@ export const RepoEnvEditor: React.FC<{
 const EnvironmentPanel: React.FC<{
   projectId: string;
   repo: string;
+  app?: MonorepoAppId;
   environment: PipelineBranch;
   data: HostingEnvList;
   canWrite: boolean;
   onChanged: () => void;
-}> = ({ projectId, repo, environment, data, canWrite, onChanged }) => {
+}> = ({ projectId, repo, app, environment, data, canWrite, onChanged }) => {
   const [rows, setRows] = useState<EnvRow[]>([{ key: '', value: '' }]);
   const [redeploy, setRedeploy] = useState(true);
   const [pasting, setPasting] = useState(false);
@@ -121,7 +128,7 @@ const EnvironmentPanel: React.FC<{
     setBusy('save');
     setResult(null);
     try {
-      const change = await apiService.setRepoHostingEnv(projectId, repo, { environment, vars: filled, redeploy });
+      const change = await apiService.setRepoHostingEnv(projectId, repo, { environment, vars: filled, redeploy }, app);
       report(change, 'Saved');
       // Values leave the page once saved; nothing keeps them afterwards.
       setRows(change.failed.length ? filled.filter(row => change.failed.some(f => f.key === row.key)) : [{ key: '', value: '' }]);
@@ -142,7 +149,7 @@ const EnvironmentPanel: React.FC<{
     setBusy(key);
     setResult(null);
     try {
-      report(await apiService.deleteRepoHostingEnv(projectId, repo, environment, key, redeploy), 'Removed');
+      report(await apiService.deleteRepoHostingEnv(projectId, repo, environment, key, redeploy, app), 'Removed');
       onChanged();
     } catch (err) {
       setResult({ tone: 'warn', text: describeRepoError(err) });

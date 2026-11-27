@@ -66,6 +66,8 @@ import {
   ChatMessage as ProjectChatMessage,
   ScaffoldRequest,
   ScaffoldResponse,
+  ScaffoldOptions,
+  MonorepoAppId,
   RepoBranch,
   RepoTree,
   RepoArchitecture,
@@ -221,6 +223,15 @@ function projectRepoPath(projectId: string, repo: string): string {
   const owner = slash > 0 ? repo.slice(0, slash) : repo;
   const name = slash > 0 ? repo.slice(slash + 1) : '';
   return `/projects/${encodeURIComponent(projectId)}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`;
+}
+
+/**
+ * A hosting path for one app of a monorepo: `?app=web` or `?app=api` added to
+ * whatever query it already has. Unchanged for any other repository.
+ */
+function forApp(path: string, app?: MonorepoAppId): string {
+  if (!app) return path;
+  return `${path}${path.includes('?') ? '&' : '?'}app=${app}`;
 }
 
 /** A query string from the defined values, or nothing. */
@@ -1325,6 +1336,8 @@ export const apiService = {
       method: 'POST',
       body: JSON.stringify(payload)
     }),
+  /** Which stacks the create form may offer for each repository shape. */
+  getScaffoldOptions: () => fetchJson<ScaffoldOptions>('/github/scaffold-options'),
 
   /*
    * A project's GitHub repositories, read through the API.
@@ -1390,15 +1403,16 @@ export const apiService = {
     fetchJson<RepoDeletionResult>(`${projectRepoPath(projectId, repo)}?confirm=${encodeURIComponent(repo)}`, {
       method: 'DELETE'
     }),
-  getRepoHosting: (projectId: string, repo: string) =>
-    fetchJson<HostingStatus>(`${projectRepoPath(projectId, repo)}/hosting`),
+  // Every hosting call takes `app` for a monorepo, whose frontend and backend are hosted separately.
+  getRepoHosting: (projectId: string, repo: string, app?: MonorepoAppId) =>
+    fetchJson<HostingStatus>(forApp(`${projectRepoPath(projectId, repo)}/hosting`, app)),
   /** Sets up hosting the first time, or retries a failed/partial one. PM and admin only; can take 10-40s. */
-  setUpRepoHosting: (projectId: string, repo: string) =>
-    fetchJson<HostingStatus>(`${projectRepoPath(projectId, repo)}/hosting`, { method: 'POST' }),
-  getRepoHostingPreviews: (projectId: string, repo: string) =>
-    fetchJson<HostingPreviews>(`${projectRepoPath(projectId, repo)}/hosting/previews`),
-  getRepoBuildBranchPreview: (projectId: string, repo: string, branch: string) =>
-    fetchJson<BuildBranchPreview>(`${projectRepoPath(projectId, repo)}/hosting/branch-preview?branch=${encodeURIComponent(branch)}`),
+  setUpRepoHosting: (projectId: string, repo: string, app?: MonorepoAppId) =>
+    fetchJson<HostingStatus>(forApp(`${projectRepoPath(projectId, repo)}/hosting`, app), { method: 'POST' }),
+  getRepoHostingPreviews: (projectId: string, repo: string, app?: MonorepoAppId) =>
+    fetchJson<HostingPreviews>(forApp(`${projectRepoPath(projectId, repo)}/hosting/previews`, app)),
+  getRepoBuildBranchPreview: (projectId: string, repo: string, branch: string, app?: MonorepoAppId) =>
+    fetchJson<BuildBranchPreview>(forApp(`${projectRepoPath(projectId, repo)}/hosting/branch-preview?branch=${encodeURIComponent(branch)}`, app)),
   /**
    * One page of a hosted branch's logs. Answered as raw JSON: the log view
    * normalises it, so an older server's shape still reads. List filters are
@@ -1417,7 +1431,8 @@ export const apiService = {
       level?: readonly string[];
       text?: string;
       instance?: readonly string[];
-    }
+    },
+    app?: MonorepoAppId
   ) => {
     const params = new URLSearchParams({ branch });
     for (const [key, value] of Object.entries(query)) {
@@ -1425,10 +1440,11 @@ export const apiService = {
       const text = Array.isArray(value) ? value.join(',') : String(value);
       if (text) params.set(key, text);
     }
+    if (app) params.set('app', app);
     return fetchJson<Record<string, unknown>>(`${projectRepoPath(projectId, repo)}/hosting/logs?${params.toString()}`);
   },
-  getRepoHostingEnv: (projectId: string, repo: string) =>
-    fetchJson<HostingEnvList>(`${projectRepoPath(projectId, repo)}/hosting/env`),
+  getRepoHostingEnv: (projectId: string, repo: string, app?: MonorepoAppId) =>
+    fetchJson<HostingEnvList>(forApp(`${projectRepoPath(projectId, repo)}/hosting/env`, app)),
   /**
    * Set variables on one environment. Values go in the body only -- never a
    * URL -- and are never readable afterwards. `main` needs a project manager
@@ -1437,18 +1453,20 @@ export const apiService = {
   setRepoHostingEnv: (
     projectId: string,
     repo: string,
-    change: { environment: string; vars: Array<{ key: string; value: string }>; redeploy: boolean }
+    change: { environment: string; vars: Array<{ key: string; value: string }>; redeploy: boolean },
+    app?: MonorepoAppId
   ) =>
     fetchJson<EnvChangeResult>(`${projectRepoPath(projectId, repo)}/hosting/env`, {
       method: 'PUT',
-      body: JSON.stringify(change)
+      body: JSON.stringify(app ? { ...change, app } : change)
     }),
-  deleteRepoHostingEnv: (projectId: string, repo: string, environment: string, key: string, redeploy: boolean) =>
+  deleteRepoHostingEnv: (projectId: string, repo: string, environment: string, key: string, redeploy: boolean, app?: MonorepoAppId) =>
     fetchJson<EnvChangeResult>(
       `${projectRepoPath(projectId, repo)}/hosting/env?${new URLSearchParams({
         environment,
         key,
-        redeploy: String(redeploy)
+        redeploy: String(redeploy),
+        ...(app ? { app } : {})
       }).toString()}`,
       { method: 'DELETE' }
     ),
@@ -1463,8 +1481,8 @@ export const apiService = {
       { method: 'POST' }
     ),
   /** Checks a backend branch's `/health`. On request only: it can wake a sleeping service (up to a minute). */
-  checkRepoHealth: (projectId: string, repo: string, branch: string) =>
-    fetchJson<HealthResult>(`${projectRepoPath(projectId, repo)}/hosting/health?branch=${encodeURIComponent(branch)}`),
+  checkRepoHealth: (projectId: string, repo: string, branch: string, app?: MonorepoAppId) =>
+    fetchJson<HealthResult>(forApp(`${projectRepoPath(projectId, repo)}/hosting/health?branch=${encodeURIComponent(branch)}`, app)),
 
   cloneGitHubRepo: (payload: { repo: string; intoDir: string }) =>
     fetchJson<{ path: string }>('/github/repos/clone', {

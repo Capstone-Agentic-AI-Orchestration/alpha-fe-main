@@ -2,7 +2,8 @@ import React from 'react';
 import { AlertTriangle, ExternalLink, GitBranch, Info, Rocket, X } from 'lucide-react';
 
 import { CopyButton } from '@/shared/components/CopyButton';
-import { HostingStatus, ScaffoldRepoResult } from '@/shared/types';
+import { HostingStatus, ScaffoldMonorepoApp, ScaffoldRepoResult } from '@/shared/types';
+import { MONOREPO_APP_LABEL } from './monorepoApps';
 
 const DEPLOY_TARGET_LABEL: Record<'render' | 'vercel', string> = {
   render: 'Render',
@@ -22,7 +23,7 @@ const HOSTING_STATE_LABEL: Record<HostingStatus['state'], string> = {
  * the full detail (environment variables, GitHub Actions secrets, connected
  * repository) lives in the Hosting panel, not duplicated here.
  */
-const HostingSummary: React.FC<{ hosting: HostingStatus }> = ({ hosting }) => {
+const HostingSummary: React.FC<{ hosting: HostingStatus; app?: string }> = ({ hosting, app }) => {
   const platformLabel = hosting.platform ? DEPLOY_TARGET_LABEL[hosting.platform] : 'Hosting';
   // main and uat are the two environments worth linking to from a summary;
   // dev previews point at the same uat backend and add nothing here.
@@ -32,7 +33,7 @@ const HostingSummary: React.FC<{ hosting: HostingStatus }> = ({ hosting }) => {
     <div className="space-y-1.5 border-t border-divider pt-2.5">
       <p className="flex items-center gap-1.5 text-[11px] text-content-secondary">
         <Rocket className="h-3 w-3 text-link" aria-hidden />
-        {platformLabel}
+        {app ? `${app} on ${platformLabel}` : platformLabel}
         <span className="rounded bg-surface-raised px-1.5 py-0.5 text-[10px] text-content-secondary">
           {HOSTING_STATE_LABEL[hosting.state]}
         </span>
@@ -70,8 +71,31 @@ const HostingSummary: React.FC<{ hosting: HostingStatus }> = ({ hosting }) => {
         </p>
       )}
 
-      <p className="text-[11px] text-content-muted">See the Hosting panel under Environment in the project.</p>
+      {!app && <p className="text-[11px] text-content-muted">See the Hosting panel under Environment in the project.</p>}
     </div>
+  );
+};
+
+/** A single repository's hosting, or that none was asked for. */
+const RepositoryHosting: React.FC<{ result: ScaffoldRepoResult }> = ({ result }) => {
+  if (result.hosting) return <HostingSummary hosting={result.hosting} />;
+  if (result.requiredSecrets.length > 0 || result.deployTarget) return null;
+  return <p className="border-t border-divider pt-2.5 text-[11px] text-content-muted">Deploys weren't requested for this repository.</p>;
+};
+
+/** A monorepo's hosting: each app on its own platform. */
+const MonorepoHosting: React.FC<{ apps: ScaffoldMonorepoApp[] }> = ({ apps }) => {
+  const hosted = apps.flatMap(app => (app.hosting ? [{ app, hosting: app.hosting }] : []));
+  if (hosted.length === 0) {
+    return <p className="border-t border-divider pt-2.5 text-[11px] text-content-muted">Deploys weren't requested for this repository.</p>;
+  }
+  return (
+    <>
+      {hosted.map(({ app, hosting }) => (
+        <HostingSummary key={app.id} hosting={hosting} app={`${MONOREPO_APP_LABEL[app.id]} (${app.path})`} />
+      ))}
+      <p className="text-[11px] text-content-muted">See the Hosting panel under Environment in the project.</p>
+    </>
   );
 };
 
@@ -196,16 +220,7 @@ export const ScaffoldResultCard: React.FC<ScaffoldResultCardProps> = ({ result, 
         </div>
       )}
 
-      {result.hosting ? (
-        <HostingSummary hosting={result.hosting} />
-      ) : (
-        result.requiredSecrets.length === 0 &&
-        !result.deployTarget && (
-          <p className="border-t border-divider pt-2.5 text-[11px] text-content-muted">
-            Deploys weren't requested for this repository.
-          </p>
-        )
-      )}
+      {result.apps?.length ? <MonorepoHosting apps={result.apps} /> : <RepositoryHosting result={result} />}
     </section>
   );
 };

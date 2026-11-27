@@ -329,6 +329,29 @@ export type ScaffoldFrontendStack = 'react' | 'nextjs';
 /** The backend half of a paired scaffold. */
 export type ScaffoldBackendStack = 'nodejs' | 'nestjs';
 
+/** One app of a monorepo: the frontend in `apps/web`, the backend in `apps/api`. */
+export type MonorepoAppId = 'web' | 'api';
+
+/** A stack the create form may offer, as `GET /github/scaffold-options` reports it. */
+export interface ScaffoldStackOption {
+  id: ScaffoldStack;
+  label: string;
+  role: 'frontend' | 'backend';
+}
+
+/**
+ * What the create form may offer per shape: the stacks Alpha scaffolds and
+ * hosts that the configured workflow library has CI templates for.
+ */
+export interface ScaffoldOptions {
+  source: string | null;
+  standalone: ScaffoldStackOption[];
+  paired: { frontend: ScaffoldStackOption[]; backend: ScaffoldStackOption[] };
+  monorepo: { frontend: ScaffoldStackOption[]; backend: ScaffoldStackOption[] };
+  /** Why something (usually the monorepo) is not offered. */
+  error?: string;
+}
+
 interface ScaffoldRequestBase {
   projectId: string;
   repoName: string;
@@ -346,15 +369,25 @@ interface ScaffoldRequestBase {
 export type ScaffoldRequest =
   | (ScaffoldRequestBase & { shape?: 'standalone'; stack?: ScaffoldStack })
   | (ScaffoldRequestBase & {
-      shape: 'paired';
+      shape: 'paired' | 'monorepo';
       frontendStack: ScaffoldFrontendStack;
       backendStack: ScaffoldBackendStack;
     });
 
+/** One app of a created monorepo, with its own platform and hosting. */
+export interface ScaffoldMonorepoApp {
+  id: MonorepoAppId;
+  role: 'frontend' | 'backend';
+  stack: ScaffoldStack;
+  path: string;
+  deployTarget: 'render' | 'vercel';
+  hosting?: HostingStatus;
+}
+
 /** One repository the scaffold created. */
 export interface ScaffoldRepoResult {
-  /** Standalone responses may carry it; paired ones wrap these instead. */
-  shape?: 'standalone';
+  /** Standalone responses may carry it; paired ones wrap these instead; a monorepo says so. */
+  shape?: 'standalone' | 'monorepo';
   url: string;
   nameWithOwner: string;
   localPath?: string;
@@ -375,6 +408,8 @@ export interface ScaffoldRepoResult {
   ciSource: string;
   /** Where the platform (Render or Vercel) stands right after scaffolding, if known yet. */
   hosting?: HostingStatus;
+  /** A monorepo's apps, each hosted on its own platform; `hosting` is then absent. */
+  apps?: ScaffoldMonorepoApp[];
 }
 
 export interface ScaffoldPairedResult {
@@ -528,6 +563,8 @@ export interface RepoDeletionResult {
  */
 export interface HostingStatus {
   repo: string;
+  /** Which app of a monorepo this status is for; absent for any other repository. */
+  app?: MonorepoAppId;
   role: 'backend' | 'frontend' | null;
   platform: 'render' | 'vercel' | null;
   configured: boolean;
@@ -657,12 +694,23 @@ export interface ProjectResource {
   name: string;
   pathOrUrl: string;
   branchOrMachine?: string;
-  /** Stack the scaffold was generated from. Absent on attached repositories. */
+  /** Stack the scaffold was generated from. Absent on attached repositories and on monorepos, which have `apps`. */
   stack?: ScaffoldStack;
-  /** Repository shape the scaffold used. Absent on attached repositories. */
+  /** Repository shape the scaffold used: standalone, paired or monorepo. Absent on attached repositories. */
   shape?: string;
+  /** A monorepo's frontend and backend, each in its own folder. */
+  apps?: ProjectResourceApp[];
   /** Managed working copy on this machine, when Alpha created or cloned it. */
   localPath?: string;
+}
+
+/** One app of a monorepo resource. */
+export interface ProjectResourceApp {
+  id: MonorepoAppId;
+  role: 'frontend' | 'backend';
+  stack: ScaffoldStack;
+  /** Folder inside the repository, e.g. `apps/web`. */
+  path: string;
 }
 
 export interface Milestone {

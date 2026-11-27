@@ -2,12 +2,15 @@ import React, { useState, useRef, useEffect } from 'react';
 import { apiService, parseApiError, scaffoldedRepositories, type GitHubOrgMembership } from '@/shared/services/apiService';
 import { orgBlocksRepoCreation } from './orgRepoPolicy';
 import {
+  HostingStatus,
   ProjectResource,
   ScaffoldBackendStack,
   ScaffoldFrontendStack,
+  ScaffoldOptions,
   ScaffoldRepoResult,
   ScaffoldRequest,
-  ScaffoldStack
+  ScaffoldStack,
+  ScaffoldStackOption
 } from '@/shared/types';
 import { useApp } from '@/app/AppContext';
 import { aiFeaturesEnabled } from '@/config/features';
@@ -17,8 +20,152 @@ import { ScaffoldResultCard } from './ScaffoldResultCard';
 import { DeleteRepositoryConfirm, repoNameWithOwner } from './DeleteRepositoryConfirm';
 import type { RepoDeletionResult } from '@/shared/types';
 import { ArchitectureDiagramModal } from './repository/ArchitectureDiagramModal';
+import { newMonorepoApps } from './monorepoApps';
 
-type RepoShape = 'standalone' | 'paired';
+type RepoShape = 'standalone' | 'paired' | 'monorepo';
+
+const selectClass =
+  'bg-surface border border-control rounded-xl px-2.5 py-1.5 text-xs text-content focus:outline-none focus:border-control disabled:opacity-50';
+
+/**
+ * One stack choice. A choice with a single possible value is shown as a label,
+ * not a select -- the monorepo is React with the Node.js API, and a dropdown
+ * holding one item only suggests there were others.
+ */
+const StackChoice: React.FC<{
+  id: string;
+  label: string;
+  options: readonly ScaffoldStackOption[];
+  value: string;
+  onChange: (value: ScaffoldStack) => void;
+  disabled: boolean;
+}> = ({ id, label, options, value, onChange, disabled }) => (
+  <>
+    <label htmlFor={id} className="text-[11px] text-content-muted flex-shrink-0">
+      {label}
+    </label>
+    {options.length === 1 ? (
+      <span id={id} className="bg-surface border border-divider rounded-xl px-2.5 py-1.5 text-xs text-content-secondary">
+        {options[0].label}
+      </span>
+    ) : (
+      <select id={id} value={value} onChange={e => onChange(e.target.value as ScaffoldStack)} disabled={disabled} className={selectClass}>
+        {options.map(option => (
+          <option key={option.id} value={option.id}>{option.label}</option>
+        ))}
+      </select>
+    )}
+  </>
+);
+
+/** Whether the server can create a monorepo, and why not. `undefined` options: still asking, so no reason yet. */
+export function monorepoAvailability(options: ScaffoldOptions | null | undefined): { available: boolean; reason: string | null } {
+  if (options === undefined) return { available: false, reason: null };
+  if (options === null) return { available: false, reason: 'This Alpha server cannot create monorepos yet.' };
+  if (options.monorepo.frontend.length && options.monorepo.backend.length) return { available: true, reason: null };
+  return { available: false, reason: options.error ?? 'The CI templates for a monorepo are not available.' };
+}
+
+export interface ChosenStacks {
+  single: ScaffoldStack;
+  frontend: ScaffoldFrontendStack;
+  backend: ScaffoldBackendStack;
+  monoFrontend: ScaffoldFrontendStack;
+  monoBackend: ScaffoldBackendStack;
+}
+
+export function scaffoldRequestFor(
+  shape: RepoShape,
+  base: Omit<ScaffoldRequest, 'shape' | 'stack' | 'frontendStack' | 'backendStack'>,
+  stacks: ChosenStacks
+): ScaffoldRequest {
+  if (shape === 'paired') return { ...base, shape, frontendStack: stacks.frontend, backendStack: stacks.backend };
+  if (shape === 'monorepo') return { ...base, shape, frontendStack: stacks.monoFrontend, backendStack: stacks.monoBackend };
+  return { ...base, shape: 'standalone', stack: stacks.single };
+}
+
+/** What a new resource records about its code: a stack, or a monorepo's apps. */
+export function createdStackFields(shape: RepoShape, stacks: ChosenStacks, pairedStack: ScaffoldStack): Pick<ProjectResource, 'stack' | 'apps'> {
+  if (shape === 'monorepo') return { apps: newMonorepoApps(stacks.monoFrontend, stacks.monoBackend) };
+  return { stack: shape === 'paired' ? pairedStack : stacks.single };
+}
+
+/** Every hosting status a created repository reports: its own, or one per monorepo app. */
+function hostingsOf(repo: ScaffoldRepoResult | undefined): HostingStatus[] {
+  if (repo?.apps?.length) return repo.apps.flatMap(app => (app.hosting ? [app.hosting] : []));
+  return repo?.hosting ? [repo.hosting] : [];
+}
+
+const HOSTING_HELP: Record<RepoShape, string> = {
+  standalone:
+    'Alpha sets up Render for backends or Vercel for frontends. React and Next.js show a live page; backend repositories show a health check. Paired repositories are connected automatically.',
+  paired:
+    'Alpha sets up Render for backends or Vercel for frontends. React and Next.js show a live page; backend repositories show a health check. Paired repositories are connected automatically.',
+  monorepo: 'Alpha hosts the backend on Render from apps/api and the frontend on Vercel from apps/web, and connects the two.'
+};
+
+const CREATES_NOTE: Record<RepoShape, string> = {
+  standalone:
+    'Creates the repository with a starter structure (package.json, tsconfig, lint, tests, a README and a CI workflow) on dev, uat and main branches. Work lands on dev.',
+  paired:
+    'Creates the repository with a starter structure (package.json, tsconfig, lint, tests, a README and a CI workflow) on dev, uat and main branches. Work lands on dev.',
+  monorepo:
+    'Creates the repository with both apps’ starter structure (package.json, tsconfig, lint, tests and a README each), a CI workflow per app, and dev, uat and main branches. Work lands on dev.'
+};
+
+const SHAPES: ReadonlyArray<{ value: RepoShape; label: string }> = [
+  { value: 'standalone', label: 'Single repository' },
+  { value: 'paired', label: 'Frontend + backend (paired)' },
+  { value: 'monorepo', label: 'Frontend + backend (one repository)' }
+];
+
+/** Shape first: it decides what the name means and which stacks apply. */
+export const ShapePicker: React.FC<{
+  name: string;
+  value: RepoShape;
+  onChange: (shape: RepoShape) => void;
+  disabled: boolean;
+  monorepo: { available: boolean; reason: string | null };
+}> = ({ name, value, onChange, disabled, monorepo }) => (
+  <fieldset disabled={disabled}>
+    <legend className="text-[11px] text-content-muted mb-1.5">Repository shape</legend>
+    <div className="grid grid-cols-3 gap-1 rounded-xl border border-divider bg-surface p-0.5">
+      {SHAPES.map(option => {
+        const unavailable = option.value === 'monorepo' && !monorepo.available;
+        return (
+          <label
+            key={option.value}
+            className={`relative ${unavailable ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+            title={unavailable ? monorepo.reason ?? undefined : undefined}
+          >
+            <input
+              type="radio"
+              name={name}
+              value={option.value}
+              checked={value === option.value}
+              onChange={() => onChange(option.value)}
+              disabled={unavailable}
+              className="peer sr-only"
+            />
+            <span className="block rounded-lg px-2.5 py-1.5 text-center text-[11px] text-content-secondary transition-colors hover:text-content peer-checked:bg-surface-raised peer-checked:font-medium peer-checked:text-content peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-brand-400">
+              {option.label}
+            </span>
+          </label>
+        );
+      })}
+    </div>
+    {monorepo.reason && <p className="mt-1 text-[10px] text-content-muted">One-repository projects are unavailable: {monorepo.reason}</p>}
+  </fieldset>
+);
+
+/** Where a monorepo's two apps will live. */
+const MonorepoHint: React.FC<{ id: string; name: string }> = ({ id, name }) => (
+  <p id={id} className="text-[11px] text-content-muted">
+    Creates <code className="font-mono text-content-secondary">{name}</code> with the frontend in{' '}
+    <code className="font-mono text-content-secondary">apps/web</code> and the backend in{' '}
+    <code className="font-mono text-content-secondary">apps/api</code>. Each app has its own tests, CI and hosting.
+  </p>
+);
 
 /** A toast title that says what went wrong; the API's own sentence goes underneath. */
 function scaffoldFailureTitle(status: number | null): string {
@@ -125,6 +272,22 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
   /** What the last create made, kept until dismissed: it lists what is still to set up. */
   const [ghResults, setGhResults] = useState<ScaffoldRepoResult[]>([]);
   const isPaired = ghShape === 'paired';
+  const isMonorepo = ghShape === 'monorepo';
+  /**
+   * What the server can create, read from the workflow library it uses:
+   * undefined until answered, null when the server predates the question.
+   */
+  const [ghOptions, setGhOptions] = useState<ScaffoldOptions | null | undefined>(undefined);
+  const monorepo = monorepoAvailability(ghOptions);
+  const [ghMonoFrontend, setGhMonoFrontend] = useState<ScaffoldFrontendStack>('react');
+  const [ghMonoBackend, setGhMonoBackend] = useState<ScaffoldBackendStack>('nodejs');
+  const stacks: ChosenStacks = {
+    single: ghStack,
+    frontend: ghFrontendStack,
+    backend: ghBackendStack,
+    monoFrontend: ghMonoFrontend,
+    monoBackend: ghMonoBackend
+  };
 
   // Once the project has an org, it is settled for every repository in it.
   const orgLocked = Boolean(githubOrg);
@@ -140,6 +303,14 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
     // Orgs are a separate call so a missing read:org scope degrades to
     // "personal only" instead of breaking the whole panel.
     apiService.listGitHubOrgs().then(setGhOrgs).catch(() => setGhOrgs([]));
+    apiService.getScaffoldOptions().then(options => {
+      setGhOptions(options);
+      // Start on what the server offers, so a request can never name a stack it refuses.
+      const [web] = options.monorepo.frontend;
+      const [api] = options.monorepo.backend;
+      if (web) setGhMonoFrontend(web.id as ScaffoldFrontendStack);
+      if (api) setGhMonoBackend(api.id as ScaffoldBackendStack);
+    }).catch(() => setGhOptions(null));
   }, [isFull, readOnly, canCreateRepository]);
 
   const handleCreateRepo = async () => {
@@ -159,10 +330,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
     setGhError(null);
     try {
       const base = { projectId, repoName, org, visibility: ghVisibility, deploy: ghDeploy };
-      const request: ScaffoldRequest = isPaired
-        ? { ...base, shape: 'paired', frontendStack: ghFrontendStack, backendStack: ghBackendStack }
-        : { ...base, shape: 'standalone', stack: ghStack };
-      const created = scaffoldedRepositories(await apiService.scaffoldGitHubRepo(request));
+      const created = scaffoldedRepositories(await apiService.scaffoldGitHubRepo(scaffoldRequestFor(ghShape, base, stacks)));
 
       const stamp = Date.now();
       onChange([
@@ -174,7 +342,8 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
           pathOrUrl: repo.url,
           // Work lands on dev; uat and main only move by promotion.
           branchOrMachine: 'dev',
-          stack: isPaired ? pairedStack(repo, index) : ghStack,
+          // A monorepo has a stack per app rather than one for the repository.
+          ...createdStackFields(ghShape, stacks, pairedStack(repo, index)),
           shape: ghShape,
           // Alpha pushed from this directory, so it is already a working copy —
           // nothing needs cloning for a repository created here.
@@ -192,11 +361,12 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
       if (hostingRepo) {
         onRepositoryCreated?.(created.map(repo => repo.nameWithOwner), hostingRepo.nameWithOwner);
       }
-      const hosting = hostingRepo?.hosting;
-      const hostingFailed = hosting?.state === 'unavailable' || hosting?.state === 'failed';
+      // A monorepo reports hosting per app; any app that needs attention is the one to mention.
+      const hosting = hostingsOf(hostingRepo).find(item => item.state === 'unavailable' || item.state === 'failed');
+      const hostingFailed = Boolean(hosting);
       const hostingNextStep = ghDeploy ? 'Check the first deployment under Environment → Hosting.' : 'Set up hosting under Environment → Hosting.';
       const toastDescription = hostingFailed
-        ? `${hosting.error ?? 'Hosting needs attention.'} Review Hosting under Environment.`
+        ? `${hosting?.error ?? 'Hosting needs attention.'} Review Hosting under Environment.`
         : hostingNextStep;
       showToast(
         created.length > 1 ? 'Repositories created' : 'Repository created',
@@ -351,30 +521,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
             </p>
           ) : (
             <>
-              {/* Shape first: it decides what the name means and which stacks apply. */}
-              <fieldset disabled={ghBusy}>
-                <legend className="text-[11px] text-content-muted mb-1.5">Repository shape</legend>
-                <div className="grid grid-cols-2 gap-1 rounded-xl border border-divider bg-surface p-0.5">
-                  {([
-                    { value: 'standalone', label: 'Single repository' },
-                    { value: 'paired', label: 'Frontend + backend (paired)' }
-                  ] as const).map(option => (
-                    <label key={option.value} className="relative cursor-pointer">
-                      <input
-                        type="radio"
-                        name={`gh-shape-${projectId}`}
-                        value={option.value}
-                        checked={ghShape === option.value}
-                        onChange={() => setGhShape(option.value)}
-                        className="peer sr-only"
-                      />
-                      <span className="block rounded-lg px-2.5 py-1.5 text-center text-[11px] text-content-secondary transition-colors hover:text-content peer-checked:bg-surface-raised peer-checked:font-medium peer-checked:text-content peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-brand-400">
-                        {option.label}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
+              <ShapePicker name={`gh-shape-${projectId}`} value={ghShape} onChange={setGhShape} disabled={ghBusy} monorepo={monorepo} />
 
               <div className="flex items-center gap-2">
                 {orgLocked ? (
@@ -413,7 +560,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                   }}
                   placeholder={isPaired ? 'base-name' : 'repository-name'}
                   aria-label={isPaired ? 'Base name for the paired repositories' : 'Repository name'}
-                  aria-describedby={isPaired ? `gh-paired-hint-${projectId}` : undefined}
+                  aria-describedby={ghShape === 'standalone' ? undefined : `gh-paired-hint-${projectId}`}
                   disabled={ghBusy}
                   className="flex-1 min-w-0 bg-surface border border-control rounded-xl px-3 py-1.5 text-xs font-mono text-content placeholder-content-muted focus:outline-none focus:border-control disabled:opacity-50"
                 />
@@ -434,10 +581,31 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                   <code className="font-mono text-content-secondary">{`${ghRepoName.trim() || 'name'}-be`}</code>.
                 </p>
               )}
+              {isMonorepo && <MonorepoHint id={`gh-paired-hint-${projectId}`} name={ghRepoName.trim() || 'name'} />}
 
               {/* Stacks and visibility sit on their own row: the first already
                   carries the owner, the name and the action. */}
               <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
+                {isMonorepo && ghOptions && (
+                  <>
+                    <StackChoice
+                      id={`gh-mono-fe-stack-${projectId}`}
+                      label="Frontend"
+                      options={ghOptions.monorepo.frontend}
+                      value={ghMonoFrontend}
+                      onChange={value => setGhMonoFrontend(value as ScaffoldFrontendStack)}
+                      disabled={ghBusy}
+                    />
+                    <StackChoice
+                      id={`gh-mono-be-stack-${projectId}`}
+                      label="Backend"
+                      options={ghOptions.monorepo.backend}
+                      value={ghMonoBackend}
+                      onChange={value => setGhMonoBackend(value as ScaffoldBackendStack)}
+                      disabled={ghBusy}
+                    />
+                  </>
+                )}
                 {isPaired ? (
                   <>
                     <label htmlFor={`gh-fe-stack-${projectId}`} className="text-[11px] text-content-muted flex-shrink-0">
@@ -468,7 +636,8 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                       <option value="nestjs">NestJS</option>
                     </select>
                   </>
-                ) : (
+                ) : null}
+                {ghShape === 'standalone' && (
                   <>
                     <label htmlFor={`gh-stack-${projectId}`} className="text-[11px] text-content-muted flex-shrink-0">
                       Stack
@@ -518,15 +687,13 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                     Automatically create hosting and a live preview
                   </label>
                   <p id={`gh-deploy-help-${projectId}`} className="text-[11px] leading-relaxed text-content-muted">
-                    Alpha sets up Render for backends or Vercel for frontends. React and Next.js show a live page;
-                    backend repositories show a health check. Paired repositories are connected automatically.
+                    {HOSTING_HELP[ghShape]}
                   </p>
                 </div>
               </div>
 
               <p className="text-[11px] text-content-muted">
-                Creates the repository with a starter structure (package.json, tsconfig, lint, tests, a README and
-                a CI workflow) on dev, uat and main branches. Work lands on dev.
+                {CREATES_NOTE[ghShape]}
               </p>
 
               {/* With personal repositories removed, no organizations means no
