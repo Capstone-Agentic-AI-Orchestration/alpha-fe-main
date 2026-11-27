@@ -2,7 +2,7 @@ import { LoadingRows } from '@/shared/components/ui/skeleton';
 import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDown, RotateCcw, ScrollText } from 'lucide-react';
 
-import type { PipelineBranch } from '@/shared/types';
+import type { MonorepoAppId, PipelineBranch } from '@/shared/types';
 import { RepoSection } from '../SectionState';
 import { countLinesAfter, logLevelTone } from './logBuffer';
 import {
@@ -40,17 +40,19 @@ const controlClass =
 export const RepoLogs: React.FC<{
   projectId: string;
   repo: string;
+  /** Which app of a monorepo; absent for any other repository. */
+  app?: MonorepoAppId;
   branches: PipelineBranch[];
   /** False while the view is out of sight (another tab): the tail stops polling until it is shown again. */
   active?: boolean;
-}> = ({ projectId, repo, branches, active = true }) => {
+}> = ({ projectId, repo, app, branches, active = true }) => {
   const [branch, setBranch] = useState<PipelineBranch>(branches.includes('main') ? 'main' : branches[0]);
   const [preset, setPreset] = useState<LogRangePreset>('1h');
   const [type, setType] = useState<LogQueryFilters['type']>(null);
   // Measured once per choice: an open window keeps tailing from its start.
   const logWindow = useMemo(() => rangeWindow(preset, Date.now(), null), [preset]);
 
-  const vm = useHostingLogs({ projectId, repo, branch, window: logWindow, filters: { type }, enabled: active });
+  const vm = useHostingLogs({ projectId, repo, ...(app ? { app } : {}), branch, window: logWindow, filters: { type }, enabled: active });
 
   return (
     <RepoSection

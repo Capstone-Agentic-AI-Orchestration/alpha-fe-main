@@ -4,6 +4,7 @@ import { RefreshCw } from 'lucide-react';
 
 import { apiService } from '@/shared/services/apiService';
 import type { BranchPreview, Project } from '@/shared/types';
+import { monorepoApps, repoResource } from '@/features/projects/monorepoApps';
 import { input, primary, secondary } from './ticketUi';
 
 export interface PmProjectPreview { repository: string; branch: 'main' | 'uat'; url: string }
@@ -29,7 +30,7 @@ export function PmProjectLinkForm({ initialProjectId, initialClientVisible, init
   onCancel: () => void;
   onSubmit: (draft: PmProjectLinkDraft) => void;
 }) {
-  const [projects, setProjects] = useState<Array<Pick<Project, 'id' | 'key' | 'name'>>>([]);
+  const [projects, setProjects] = useState<Array<Pick<Project, 'id' | 'key' | 'name' | 'resources'>>>([]);
   const [projectId, setProjectId] = useState(initialProjectId ?? '');
   const [clientVisible, setClientVisible] = useState(initialClientVisible);
   const [previews, setPreviews] = useState<PmProjectPreview[]>([]);
@@ -44,7 +45,7 @@ export function PmProjectLinkForm({ initialProjectId, initialClientVisible, init
     let current = true;
     setLoading(true); setFailed(false);
     apiService.getProjects().then(value => {
-      if (current) setProjects(value.map(project => ({ id: project.id, key: project.key, name: project.name })));
+      if (current) setProjects(value.map(project => ({ id: project.id, key: project.key, name: project.name, resources: project.resources })));
     }).catch(() => { if (current) setFailed(true); })
       .finally(() => { if (current) setLoading(false); });
     return () => { current = false; };
@@ -62,8 +63,11 @@ export function PmProjectLinkForm({ initialProjectId, initialClientVisible, init
     setPreviewLoading(true); setPreviewError(false);
     void apiService.getProjectRepos(projectId).then(async result => {
       const repos = Array.isArray(result?.repositories) ? result.repositories : [];
+      const resources = projects.find(project => project.id === projectId)?.resources;
       const data = await Promise.all(repos.map(async repository => {
-        try { return { repository, previews: (await apiService.getRepoHostingPreviews(projectId, repository)).previews }; }
+        // A monorepo's page is its frontend app's.
+        const app = monorepoApps(repoResource(resources, repository)).some(entry => entry.id === 'web') ? 'web' as const : undefined;
+        try { return { repository, previews: (await apiService.getRepoHostingPreviews(projectId, repository, app)).previews }; }
         catch { return null; }
       }));
       if (!active) return;
@@ -76,7 +80,7 @@ export function PmProjectLinkForm({ initialProjectId, initialClientVisible, init
     }).catch(() => { if (active) { setPreviews([]); setPreviewError(true); } })
       .finally(() => { if (active) setPreviewLoading(false); });
     return () => { active = false; };
-  }, [projectId, refresh, initialProjectId, initialProjectPreview]);
+  }, [projectId, refresh, initialProjectId, initialProjectPreview, projects]);
 
   const selected = projects.find(project => project.id === projectId);
   const currentMissing = Boolean(initialProjectId && !projects.some(project => project.id === initialProjectId));

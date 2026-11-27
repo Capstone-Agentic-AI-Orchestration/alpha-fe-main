@@ -6,9 +6,11 @@ import {
 
 import { useApp, useTabSessionState } from '@/app/AppContext';
 import { apiService } from '@/shared/services/apiService';
-import { RepoBranch, RepoPullRequest } from '@/shared/types';
+import { MonorepoAppId, RepoBranch, RepoPullRequest } from '@/shared/types';
 import { BranchSwitcher } from './BranchSwitcher';
 import { CloneToComputerDialog, canCloneToComputer } from './CloneToComputerDialog';
+import { MonorepoAppSwitch } from './MonorepoAppSwitch';
+import { monorepoApps, repoResource } from '../monorepoApps';
 import { RepoFileBrowser } from './RepoFileBrowser';
 import { RepoLogsTab } from './RepoLogsTab';
 import { RepoEnvEditor } from './RepoEnvEditor';
@@ -210,6 +212,16 @@ const RepoPanel: React.FC<{
   canSetUpHosting: boolean;
   canManagePreviewEnv: boolean;
 }> = ({ projectId, repo, tab, idBase, canSetUpHosting, canManagePreviewEnv }) => {
+  const { projects } = useApp();
+  // A monorepo hosts its frontend and backend separately; logs and variables are per app.
+  const apps = useMemo(
+    () => monorepoApps(repoResource(projects.find(project => project.id === projectId)?.resources, repo)),
+    [projects, projectId, repo]
+  );
+  const [chosenApp, setChosenApp] = useState<MonorepoAppId | null>(null);
+  const app = apps.find(entry => entry.id === chosenApp)?.id ?? apps[0]?.id;
+  const appSwitch = (section: RepositoryTab) =>
+    app && apps.length > 1 ? <MonorepoAppSwitch id={`${idBase}-app-${section}`} apps={apps} value={app} onChange={setChosenApp} /> : null;
   const branches = useRepoResource<{ branches: RepoBranch[] }>(
     () => apiService.getRepoBranches(projectId, repo), `${projectId}|${repo}|branches`
   );
@@ -240,8 +252,25 @@ const RepoPanel: React.FC<{
       </BranchGate>
     ),
     pulls: () => <RepoPullsList repo={repo} pulls={pulls} />,
-    logs: () => <RepoLogsTab projectId={projectId} repo={repo} active={tab === 'logs'} />,
-    environment: () => <RepoEnvEditor projectId={projectId} repo={repo} canManageMain={canSetUpHosting} canManagePreview={canManagePreviewEnv} />
+    logs: () => (
+      <>
+        {appSwitch('logs')}
+        <RepoLogsTab key={app ?? ''} projectId={projectId} repo={repo} app={app} active={tab === 'logs'} />
+      </>
+    ),
+    environment: () => (
+      <>
+        {appSwitch('environment')}
+        <RepoEnvEditor
+          key={app ?? ''}
+          projectId={projectId}
+          repo={repo}
+          app={app}
+          canManageMain={canSetUpHosting}
+          canManagePreview={canManagePreviewEnv}
+        />
+      </>
+    )
   };
   return (
     <>

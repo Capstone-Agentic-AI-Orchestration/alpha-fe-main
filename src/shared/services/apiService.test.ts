@@ -42,6 +42,42 @@ describe('project Actions transport', () => {
   });
 });
 
+describe('hosting for one app of a monorepo', () => {
+  const urls = (fetchMock: ReturnType<typeof vi.fn>) => fetchMock.mock.calls.map(call => String(call[0]));
+
+  it('names the app on every hosting call, and leaves every other repository’s calls as they were', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => json({})); vi.stubGlobal('fetch', fetchMock);
+    await apiService.getRepoHosting('p1', 'acme/shop', 'web');
+    await apiService.setUpRepoHosting('p1', 'acme/shop', 'api');
+    await apiService.getRepoHostingPreviews('p1', 'acme/shop', 'web');
+    await apiService.getRepoHostingLogs('p1', 'acme/shop', 'uat', { limit: 10 }, 'api');
+    await apiService.getRepoHostingEnv('p1', 'acme/shop', 'api');
+    await apiService.deleteRepoHostingEnv('p1', 'acme/shop', 'uat', 'KEY', true, 'api');
+    await apiService.checkRepoHealth('p1', 'acme/shop', 'main', 'api');
+    await apiService.getRepoHosting('p1', 'acme/shop-fe');
+
+    expect(urls(fetchMock)).toEqual([
+      expect.stringMatching(/\/repos\/acme\/shop\/hosting\?app=web$/),
+      expect.stringMatching(/\/repos\/acme\/shop\/hosting\?app=api$/),
+      expect.stringMatching(/\/hosting\/previews\?app=web$/),
+      expect.stringMatching(/\/hosting\/logs\?branch=uat&limit=10&app=api$/),
+      expect.stringMatching(/\/hosting\/env\?app=api$/),
+      expect.stringMatching(/\/hosting\/env\?environment=uat&key=KEY&redeploy=true&app=api$/),
+      expect.stringMatching(/\/hosting\/health\?branch=main&app=api$/),
+      expect.stringMatching(/\/repos\/acme\/shop-fe\/hosting$/)
+    ]);
+  });
+
+  it('sends the app of a variable change in its body, beside the values', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(json({ changed: [], failed: [] })); vi.stubGlobal('fetch', fetchMock);
+    await apiService.setRepoHostingEnv('p1', 'acme/shop', { environment: 'uat', vars: [{ key: 'A', value: 'b' }], redeploy: true }, 'web');
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/hosting\/env$/);
+    expect(JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body))).toEqual({
+      environment: 'uat', vars: [{ key: 'A', value: 'b' }], redeploy: true, app: 'web'
+    });
+  });
+});
+
 describe('workspace board cursor transport', () => {
   it('loads a bootstrap through the selected workspace session', async () => {
     const fetchMock = vi.fn().mockResolvedValue(json({ workspaceId: 'ws-board', cursor: { workspaceId: 'ws-board', value: '4' }, projects: [], agents: [], issues: [] }));
