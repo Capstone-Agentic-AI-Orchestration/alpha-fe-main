@@ -40,7 +40,7 @@ describe('PM conversation request details', () => {
       internal: { ...active.internal, scopeVersion: null, authorizedScopeVersionId: null, requiredIssueIds: [] } });
     expect(ordinaryHtml).toContain('Mark done');
     expect(ordinaryHtml).toContain('Create task');
-    expect(ordinaryHtml).toContain('Manage request');
+    expect(ordinaryHtml).not.toContain('Manage request');
     expect(ordinaryHtml).not.toContain('Open request workflow');
     expect(ordinaryHtml).not.toContain('Send plan');
   });

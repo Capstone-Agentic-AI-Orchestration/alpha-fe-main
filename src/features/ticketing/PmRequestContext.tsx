@@ -149,9 +149,6 @@ export function PmSelectedTicket({ api = pmTicketApi, documentsApi, request, cli
         <PmCollapsibleRailCard nested id="selected-ticket-details" icon={<Info size={16} />} title="Request details">
           <p className="mb-4 whitespace-pre-wrap text-[13px] leading-relaxed text-content">{detail.description}</p>
           <Details detail={detail} clientName={clientName} />
-          {!inFlight && open && detail.writesAvailable && onOpenWorkflow
-            && <button type="button" className="mt-4 text-xs font-semibold text-link hover:underline"
-              onClick={onOpenWorkflow}>Manage request</button>}
         </PmCollapsibleRailCard>
         <PmCollapsibleRailCard nested id="selected-ticket-notes" icon={<StickyNote size={16} />} title="Private notes" initiallyOpen={false}>
           <Notes api={api} detail={detail} onSaved={() => onChanged?.()} />
