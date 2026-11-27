@@ -145,10 +145,9 @@ export const NAV_ITEMS: NavItem[] = [
 
   { id: 'intake', label: 'New request', title: 'New Request', subtitle: 'Describe what you need in plain language', group: 'primary', section: 'requests', icon: PenLine },
 
-  // The Inbox lists new inquiries, client requests and where each client project is waiting, in one
-  // place for the project manager. The Inbox and Clients open individual inquiries for a response.
-  { id: 'inbox', label: 'Inbox', title: 'Inbox', subtitle: 'Everything clients and prospects have asked for', group: 'workspace', section: 'requests', icon: Mail },
-  { id: 'inquiries', label: 'Inquiries', title: 'Inquiries', subtitle: 'Review requests that have not yet become a client project', group: 'workspace', section: 'requests', icon: Inbox, inMenus: false },
+  // Inquiries is where new prospects and project proposals are answered. With the Inbox archived it is
+  // the menu's way in again; Clients still opens a client's own proposals there.
+  { id: 'inquiries', label: 'Inquiries', title: 'Inquiries', subtitle: 'Review requests that have not yet become a client project', group: 'workspace', section: 'requests', icon: Inbox },
   { id: 'clients', label: 'Clients', title: 'Clients', subtitle: 'Clients, their projects and requests', group: 'workspace', section: 'clients', icon: Users },
   { id: 'issues', label: 'Tasks', labels: { pm: 'All Tasks', admin: 'All Tasks' }, title: 'Tasks', subtitle: 'Assigned work across your projects', group: 'workspace', section: 'my_work', sectionByRole: { pm: 'projects', admin: 'projects' }, icon: CheckSquare },
   { id: 'projects', label: 'Projects', labels: { dev: 'Projects', pm: 'All Projects', admin: 'All Projects' }, title: 'Projects & Milestones', subtitle: 'Project roadmap & deliverable progress', group: 'workspace', section: 'my_work', sectionByRole: { pm: 'projects', admin: 'projects' }, icon: FolderKanban },
@@ -170,6 +169,7 @@ export const NAV_ITEMS: NavItem[] = [
  * desired roles in ROLE_NAV_ALL.
  */
 export const ARCHIVED_NAV_ITEMS: NavItem[] = [
+  { id: 'inbox', label: 'Inbox', title: 'Inbox', subtitle: 'Everything clients and prospects have asked for', group: 'workspace', section: 'requests', icon: Mail },
   { id: 'attention', label: 'Needs your attention', title: 'Needs your attention', subtitle: 'Everything waiting on you, across projects', group: 'primary', section: 'attention', icon: BellRing },
   { id: 'documents', label: 'Specifications', labels: { client: 'Shared Documents' }, title: 'Specifications', subtitle: 'Requirement documents & acceptance criteria', group: 'workspace', section: 'communication', sectionByRole: { client: 'documents' }, icon: FileText },
   { id: 'deployments', label: 'CI/CD Platform', labels: { dev: 'CI/CD & Deployments', pm: 'Deployments', admin: 'Deployments' }, title: 'CI/CD Platform', subtitle: 'Release pipelines & preview builds', group: 'workspace', section: 'my_work', sectionByRole: { pm: 'operations', admin: 'operations' }, icon: Rocket }
@@ -215,7 +215,7 @@ const ROLE_NAV_ALL: Record<UserRole, NavigationTab[]> = {
   dev: ['issues', 'projects', 'agents', 'skills', 'chat', 'settings'],
   // Client work starts with the client and project conversation; inquiries remain separate pre-project intake.
   pm: [
-    'clients', 'inbox', 'inquiries', 'projects', 'issues',
+    'clients', 'inquiries', 'projects', 'issues',
     'chat', 'agents', 'skills', 'analytics', 'settings'
   ],
   admin: [
