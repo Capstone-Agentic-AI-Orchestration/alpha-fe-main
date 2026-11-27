@@ -15,24 +15,24 @@ const sectionsFor = (role: UserRole) => runtimeSectionsFor(role, true);
 const withoutHiddenChat = (tabs: NavigationTab[]) => tabs.filter(tab => CHAT_TAB_ENABLED || tab !== 'chat');
 
 /**
- * Navigation destinations retained after archiving standalone specifications.
+ * Navigation destinations retained after archiving standalone pages.
  * Project managers and admins see the AI destinations, Chat included, in the desktop app (config/features.ts).
  */
 const existing: Record<UserRole, NavigationTab[]> = {
   client: ['portal', 'intake', 'settings'],
-  dev: ['issues', 'attention', 'projects', 'agents', 'skills', 'chat', 'settings'],
-  pm: ['clients', 'attention', 'inbox', 'inquiries', 'projects', 'issues', 'chat', 'agents', 'skills', 'analytics', 'settings'],
-  admin: ['issues', 'attention', 'projects', 'chat', 'agents', 'skills', 'analytics', 'operations', 'settings'],
+  dev: ['issues', 'projects', 'agents', 'skills', 'chat', 'settings'],
+  pm: ['clients', 'inbox', 'inquiries', 'projects', 'issues', 'chat', 'agents', 'skills', 'analytics', 'settings'],
+  admin: ['issues', 'projects', 'chat', 'agents', 'skills', 'analytics', 'operations', 'settings'],
 };
 /**
  * Existing sidebar ordering differs from ROLE_NAV; preserve it independently.
- * Needs your attention comes first, then Chat leads the Build section for every role that builds with agents.
+ * Chat leads the Build section for every role that builds with agents.
  */
 const existingVisible: Record<UserRole, NavigationTab[]> = {
   client: ['portal', 'intake', 'settings'],
-  dev: ['attention', 'chat', 'issues', 'projects', 'agents', 'skills', 'settings'],
-  pm: ['attention', 'chat', 'clients', 'issues', 'projects', 'inbox', 'agents', 'skills', 'analytics', 'settings'],
-  admin: ['attention', 'chat', 'issues', 'projects', 'agents', 'skills', 'analytics', 'operations', 'settings'],
+  dev: ['chat', 'issues', 'projects', 'agents', 'skills', 'settings'],
+  pm: ['chat', 'clients', 'issues', 'projects', 'inbox', 'agents', 'skills', 'analytics', 'settings'],
+  admin: ['chat', 'issues', 'projects', 'agents', 'skills', 'analytics', 'operations', 'settings'],
 };
 /** PMs start with their clients; the project conversation owns each project's tickets. */
 const landing = (role: UserRole) => withoutHiddenChat(existing[role])[0];
@@ -59,7 +59,7 @@ describe('existing navigation compatibility', () => {
   });
   it('opens Inquiries from the Inbox without listing it in the menus, and scopes tickets to project conversations', () => {
     expect(ROLE_NAV.pm).not.toContain('tickets');
-    // Reachable, so the Inbox, Needs your attention and Clients can open an inquiry there.
+    // Reachable, so the Inbox and Clients can open an inquiry there.
     expect(ROLE_NAV.pm).toContain('inquiries');
     expect(sectionsFor('pm').flatMap(group => group.items.map(item => item.id))).not.toContain('tickets');
     expect(sectionsFor('pm').find(group => group.section.id === 'clients')?.items.map(item => item.id)).toEqual(['clients']);
@@ -117,11 +117,12 @@ describe('existing navigation compatibility', () => {
     }
     expect(sectionsFor('pm').map(group => group.section.id)).not.toContain('automation');
   });
-  it('archives specifications for every role and all shared menus', () => {
-    for (const tab of ['documents'] as const) {
+  it('archives attention and specifications on desktop and web', () => {
+    for (const tab of ['attention', 'documents'] as const) {
       expect(ARCHIVED_NAV_ITEMS.some(item => item.id === tab)).toBe(true);
       expect(NAV_ITEMS.some(item => item.id === tab)).toBe(false);
       for (const role of Object.keys(existing) as UserRole[]) expect(ROLE_NAV[role]).not.toContain(tab);
+      for (const tabs of Object.values(roleNav(false))) expect(tabs).not.toContain(tab);
     }
   });
   it('removes the standalone Live Build Room destination', () => {
