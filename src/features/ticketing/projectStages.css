@@ -1,7 +1,7 @@
 /* Project stages: the tracker strip, the client's stage panel and the sign-off dialog.
    Built on the shared --ui tokens so the same strip reads the same in the client portal and on PM pages. */
 
-.ps-tracker { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 20px; padding: 10px 0 2px; }
+.ps-tracker { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 20px; }
 .ps-steps { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 4px; margin: 0; padding: 0; list-style: none; }
 .ps-step { display: inline-flex; align-items: center; gap: 7px; color: rgb(var(--ui-text-muted)); font-size: 12.5px; font-weight: 500; white-space: nowrap; }
 .ps-step + .ps-step::before { content: ''; width: 22px; height: 1px; margin-right: 3px; background: rgb(var(--ui-divider)); }

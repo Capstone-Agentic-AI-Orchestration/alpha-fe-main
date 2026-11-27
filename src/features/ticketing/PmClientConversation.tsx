@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { ChevronRight, FolderKanban, Plus } from 'lucide-react';
+import { FolderKanban, Plus } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { ApiRequestError } from '@/shared/services/apiService';
 import { pmTicketApi, pmTicketDocumentsApi, type PmClientProjectConversation, type PmClientSummary, type PmTicketDetail } from './pmApi';
@@ -11,7 +11,7 @@ import { canToggleRequest, withUpdatedRequest, type ConversationItem, type Conve
 import { REQUEST_TASK_LINKED_EVENT, type LinkedRequestDraft } from './requestTaskLink';
 import { useProjectStage } from './useProjectStage';
 import { ProjectStageTracker } from './ProjectStageTracker';
-import { PmStagePanel, PmStartDevelopment } from './PmStagePanel';
+import { PmStagePanel } from './PmStagePanel';
 import { ProjectDiscoverySummaries } from './ProjectDiscoverySummaries';
 import type { StageSummary } from './projectStages';
 
@@ -150,13 +150,12 @@ function useAboutTarget(selected: ConversationAbout | null) {
  * attached to a request by creating them from it (Create task).
  */
 export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTicketDocumentsApi, client, focus = null,
-  onBackToProjects, onOpenWorkflow, onCreateTask, refreshToken }: Readonly<{
+  onOpenWorkflow, onCreateTask, refreshToken }: Readonly<{
   api?: typeof pmTicketApi;
   documentsApi?: TicketDocumentsReadApi;
   client: PmClientSummary;
   focus?: PmConversationFocus | null;
   onOpenWorkflow?: (focus: PmConversationFocus, reference: string) => void;
-  onBackToProjects?: () => void;
   /** Opens the New task dialog; absent where tasks cannot be made, as in the UI preview. */
   onCreateTask?: (draft: ConversationTaskDraft) => void;
   refreshToken?: number;
@@ -229,12 +228,8 @@ export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTi
   const stageProps = stageSummary && projectId && clientId ? {
     api, projectId, clientId, summary: stageSummary, busy: stage.busy, actionError: stage.actionError, run: stage.run,
   } : null;
-  const stageCard = stageProps ? { ...stageCardText(stageProps.summary), content: <PmStagePanel {...stageProps} startInHeader /> } : null;
-  const startDevelopment = stageProps && (stageProps.summary.stage === 'poc' || stageProps.summary.stage === 'contract')
-    ? <div className="flex flex-wrap items-center gap-2">
-        <span className="text-content-muted">After signing in person</span>
-        <PmStartDevelopment key={stageProps.projectId} {...stageProps} />
-      </div> : undefined;
+  const stageCard = stageProps ? { ...stageCardText(stageProps.summary), content: <PmStagePanel {...stageProps} /> } : null;
+  const inProofOfConcept = stageSummary?.stage === 'poc' || stageSummary?.stage === 'contract';
   const previewShared = client.projects.find(item => item.projectId === projectId)?.previewPublished;
   const inputId = `pm-conversation-${client.key}`;
   const refreshTicket = () => { setContextVersion(value => value + 1); void load(true); };
@@ -253,24 +248,14 @@ export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTi
   </Button>;
 
   const conversationHeader = <>
-    {project && <header className="flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-divider px-6 py-3">
-      <nav aria-label="Breadcrumb" className="flex min-w-0 flex-wrap items-center gap-1 text-[11.5px] text-content-muted">
-        <span>Clients</span><ChevronRight className="h-3 w-3 shrink-0" aria-hidden="true" />
-        <span className="max-w-40 truncate">{client.displayName}</span><ChevronRight className="h-3 w-3 shrink-0" aria-hidden="true" />
-        {onBackToProjects ? <Button type="button" variant="ghost" size="sm" onClick={onBackToProjects}
-          className="h-auto px-0 py-0 text-[11.5px] font-normal text-content-muted hover:bg-transparent hover:text-content">Projects</Button>
-          : <span>Projects</span>}
-        <ChevronRight className="h-3 w-3 shrink-0" aria-hidden="true" />
-        <span aria-current="page" className="max-w-48 truncate font-medium text-content">{project.projectName}</span>
-      </nav>
+    {project && <header className="flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-divider px-4 py-3 sm:px-6">
+      {stageSummary && <ProjectStageTracker summary={stageSummary} role="pm" unsetPrompt={false}
+        nextActionControl={inProofOfConcept ? null : undefined} />}
       <div className="ml-auto min-w-0 text-right">
         <h2 className="truncate text-[14px] font-semibold text-content">{project.projectName}</h2>
         <p className="text-[12px] text-content-muted">Project conversation</p>
       </div>
     </header>}
-    {project && stageSummary && <div className="shrink-0 border-b border-divider px-6 pb-2">
-      <ProjectStageTracker summary={stageSummary} role="pm" unsetPrompt={false} nextActionControl={startDevelopment} />
-    </div>}
     <ProjectDiscoverySummaries summaries={discoverySummaries} />
   </>;
   return <div className="flex h-full min-h-0 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">

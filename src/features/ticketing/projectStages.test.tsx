@@ -81,6 +81,9 @@ describe('stage UI', () => {
     expect(html).not.toContain('Unlimited changes');
     expect(html).toContain('Your turn: Start development once the contract is signed');
     expect(html).not.toContain('>Contract<');
+    const stepsOnly = renderToStaticMarkup(<ProjectStageTracker summary={summary()} role="pm" nextActionControl={null} />);
+    expect(stepsOnly).toContain('aria-current="step"');
+    expect(stepsOnly).not.toContain('Start development');
     expect(renderToStaticMarkup(<ProjectStageTracker summary={summary({ stage: 'development', revisionsUsed: 1 })} role="pm" />))
       .toContain('Revisions: 1 of 3 used');
   });
@@ -102,7 +105,7 @@ describe('stage UI', () => {
     const poc = renderToStaticMarkup(<PmStagePanel {...props} summary={summary()} />);
     expect(poc).toContain('Proof of concept');
     expect(poc).toContain('Start development');
-    expect(poc).toContain('signing the contract in person');
+    expect(poc).toContain('aria-haspopup="dialog"');
     expect(renderToStaticMarkup(<PmStagePanel {...props} summary={summary({ stage: 'contract' })} />)).toContain('Start development');
     for (const gone of ['New POC version', 'Write the POC', 'Summary of the proposed system', 'Add feature', 'Screens and pages', 'Not included',
       'Note to the client', 'Share with the client', 'Save draft']) expect(poc).not.toContain(gone);
