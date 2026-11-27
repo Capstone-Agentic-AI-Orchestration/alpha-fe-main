@@ -1,7 +1,8 @@
 import { LoadingRows } from '@/shared/components/ui/skeleton';
 import { Button } from '@/shared/components/ui/button';
+import GenerateAIButton from '@/components/shadcn-space/button/button-33';
 import { useEffect, useState, type ReactNode } from 'react';
-import { ArrowRight, BellRing, ClipboardCheck, Clock, FolderKanban, Lightbulb, MessageSquare, Plus, Search, Sparkles } from 'lucide-react';
+import { ArrowRight, BellRing, ClipboardCheck, Clock, FolderKanban, Lightbulb, MessageSquare, Monitor, Plus, Search, Sparkles } from 'lucide-react';
 
 import type { ClientProject, ClientProjectFeedbackMessage, ClientProjectRequestItem, ClientProjectRequestQueue } from './clientApi';
 import { clientTicketApi } from './clientApi';
@@ -133,10 +134,13 @@ function ClientProjectCard({ project, requests, onOpenProject, latest }: {
   const open = mine.filter(item => clientRequestGroup(item) !== 'done');
   const needsYou = open.filter(item => clientRequestGroup(item) === 'needs_you').length;
   const titleId = 'client-project-card-' + clientProjectKey(project).replace(/\W/g, '-');
-  return <article className="cx-pcard" aria-labelledby={titleId}>
+  return <article className={'cx-pcard' + (project.preview ? '' : ' is-preview-unshared')} aria-labelledby={titleId}>
     <div className="cx-pcard-picture">
       {project.preview ? <ClientPreviewThumb preview={project.preview} projectName={project.name} />
-        : <div className="cx-pcard-no-preview" role="status">There is still no preview.</div>}
+        : <div className="cx-pcard-no-preview cx-preview-glass" role="status">
+            <Monitor size={24} strokeWidth={1.5} aria-hidden="true" />
+            <span>Preview not shared yet</span>
+          </div>}
     </div>
     <div className="cx-pcard-body">
       <header className="cx-pcard-head">
@@ -159,8 +163,9 @@ function ClientProjectCard({ project, requests, onOpenProject, latest }: {
           { label: 'Open', value: open.length },
           { label: 'Done', value: mine.length - open.length, tone: 'done' },
         ]} />
-        <button type="button" className="cx-button" onClick={onOpenProject}
-          aria-label={'Open project: ' + project.name}>Open project <ArrowRight size={14} aria-hidden="true" /></button>
+        <GenerateAIButton onClick={onOpenProject} aria-label={'Open project: ' + project.name}>
+          Open project <ArrowRight size={14} aria-hidden="true" />
+        </GenerateAIButton>
       </footer>
     </div>
   </article>;

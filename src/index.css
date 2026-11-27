@@ -353,3 +353,43 @@ input[type='radio']:disabled {
   .agent-flow-stage button { transition: none; }
   .live-agent-inspector { animation: none; }
 }
+
+.star-trail-button-border {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+  background: rgb(139 92 246 / .24);
+}
+
+.star-trail-button-border::before {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  width: 120%;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  background: conic-gradient(
+    transparent 4%, rgb(139 92 246 / .18) 14%, #8b5cf6 24%, #e9d5ff 25%, transparent 26%,
+    rgb(255 255 255 / 0) 50%, rgb(255 255 255 / .08) 58%, rgb(255 255 255 / .36) 67%,
+    rgb(255 255 255 / .82) 72%, #fff 74% 76%, rgb(255 255 255 / 0) 78%
+  );
+  animation: star-trail-button-spin 2.5s linear infinite;
+  content: '';
+}
+
+.star-trail-button-border::after {
+  position: absolute;
+  inset: 1.5px;
+  border-radius: inherit;
+  background: rgb(var(--ui-shell));
+  content: '';
+}
+
+@keyframes star-trail-button-spin {
+  to { transform: rotate(1turn); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .star-trail-button-border::before { animation: none; }
+}

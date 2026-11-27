@@ -29,6 +29,7 @@ import { ClientTopBar } from './ClientTopBar';
 import { CxChips, CxEmpty, CxPageHeader, CxPanel, CxRequestRow, CxSection } from './clientKit';
 import { ClientProjectConversation } from './ClientProjectConversation';
 import { ClientPortalOrbit } from './ClientPortalOrbit';
+import { ClientPortalStars } from './ClientPortalStars';
 import { useClientWorkspaceTabs, type ClientPage as Page, type ClientProjectView } from './clientWorkspaceTabs';
 import './clientDesignTokens.css';
 import './clientPortalShowcase.css';
@@ -773,6 +774,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
 
   return <main ref={portalRootRef} className={'client-portal-shell cx-shell' + (inspectionOnly ? ' client-portal-shell--inspection' : '')}>
     <ClientPortalOrbit />
+    {(page === 'overview' || (page === 'projects' && !conversationProject)) && <ClientPortalStars showAlphaMark />}
     <ClientTopBar page={page} onNavigate={goTo}
       actions={<>
         <Button type="button" variant="ghost" size="icon" aria-label="Refresh portal" title="Refresh portal"
