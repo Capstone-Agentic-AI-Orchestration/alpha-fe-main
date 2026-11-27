@@ -215,7 +215,7 @@ export function ClientProjectConversation(props: Readonly<ClientProjectConversat
       <ViewSwitch mode={mode} onChange={next => changeProjectView(next === 'preview' ? 'preview' : 'conversation')} />
       {mode === 'preview' && shared && <FocusToggle focused={focused} onChange={next => changeProjectView(next ? 'focus' : 'preview')} />}
     </>} />
-    {stageSummary && <div className="shrink-0 border-b border-divider px-4 pb-2 sm:px-6">
+    {stageSummary && <div className="shrink-0 border-b border-divider px-4 py-2.5 sm:px-6">
       <ProjectStageTracker summary={stageSummary} role="client" nextActionControl={inProofOfConcept
         ? <span>Arrange in-person signing with your project manager.</span> : undefined} />
     </div>}

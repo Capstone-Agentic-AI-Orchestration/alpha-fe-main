@@ -24,14 +24,14 @@ export interface PmStagePanelProps {
 }
 
 /** The PM's side of the project's stage: what to prepare, publish or decide next. */
-export function PmStagePanel(props: Readonly<PmStagePanelProps & { startInHeader?: boolean }>) {
+export function PmStagePanel(props: Readonly<PmStagePanelProps>) {
   const { summary } = props;
   return <div className="space-y-5 text-[13px]">
     {summary.stage === 'unset' && <StartingStagePicker {...props} />}
     {(summary.stage === 'poc' || summary.stage === 'contract') && <section className="space-y-3">
       <h3 className="text-[13px] font-semibold text-content">Proof of concept</h3>
-      <p className="text-content-muted">Share the concept or test results in the conversation. Start development after signing the contract in person.</p>
-      {!props.startInHeader && <PmStartDevelopment {...props} />}
+      <p className="text-content-muted">Share the concept or test results in the conversation.</p>
+      <PmStartDevelopment {...props} />
     </section>}
     {(summary.stage === 'development' || summary.stage === 'completed') && <PmRequests {...props} />}
     {summary.stage === 'development' && <PmDevelopmentStage {...props} />}
@@ -78,7 +78,7 @@ function StartingStagePicker({ api, projectId, clientId, busy, run }: Readonly<P
 const rounds = (value: string) => Math.max(0, Math.min(20, Math.trunc(Number(value)) || 0));
 
 /** Confirm the offline signing and record the revision allowance together. */
-export function PmStartDevelopment({ api, projectId, clientId, summary, busy, actionError, run }: Readonly<PmStagePanelProps>) {
+function PmStartDevelopment({ api, projectId, clientId, summary, busy, actionError, run }: Readonly<PmStagePanelProps>) {
   const [confirming, setConfirming] = useState(false);
   const [limit, setLimit] = useState(summary.revisionLimit);
   const start = async () => {

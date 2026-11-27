@@ -256,7 +256,7 @@ export function PmClientsWorkspace({ api = pmTicketApi, documentsApi = pmTicketD
       </div>
     </div> : <p className="p-6 text-xs text-content-muted">Choose a request from the client overview.</p>}
     renderConversation={client => <PmClientConversationTab api={api} documentsApi={documentsApi} client={client} focus={conversationFocus}
-      onBackToProjects={() => onSection('projects')} onCreateTask={onCreateTask} refreshToken={refreshToken}
+      onCreateTask={onCreateTask} refreshToken={refreshToken}
       onOpenWorkflow={workflowActions !== 'none' ? (focus, reference) => {
         if (!focus.ticketId) return;
         setConversationFocus(focus);

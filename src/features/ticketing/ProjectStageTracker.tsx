@@ -12,6 +12,7 @@ export function ProjectStageTracker({ summary, role, unsetPrompt = true, nextAct
   summary: StageSummary; role: 'client' | 'pm';
   /** Whether the row says the stage isn't set; the PM's side panel says it instead, beside the stage picker. */
   unsetPrompt?: boolean;
+  /** Overrides the next-action text. Pass null to hide it. */
   nextActionControl?: ReactNode;
 }>) {
   const steps = stageSteps(summary.stage);
@@ -29,7 +30,9 @@ export function ProjectStageTracker({ summary, role, unsetPrompt = true, nextAct
     <div className="ps-meta">
       {unset && unsetPrompt && <span>{role === 'pm' ? 'This project started before stages. Choose where it is now.' : 'Stage not set yet'}</span>}
       {allowance && <span className="ps-allowance">{allowance}</span>}
-      {nextActionControl ?? (next && !(unset && role === 'pm') && <span className={next.mine ? 'ps-next is-mine' : 'ps-next'}>{next.mine ? 'Your turn: ' : ''}{next.text}</span>)}
+      {nextActionControl === undefined
+        ? next && !(unset && role === 'pm') && <span className={next.mine ? 'ps-next is-mine' : 'ps-next'}>{next.mine ? 'Your turn: ' : ''}{next.text}</span>
+        : nextActionControl}
     </div>
   </section>;
 }
