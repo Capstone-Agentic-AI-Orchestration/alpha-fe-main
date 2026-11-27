@@ -87,12 +87,15 @@ export function ClientProjectShowcase({ project, projects, requests, latestMessa
   };
 
   return <section className="cx-showcase-layout" aria-label="Project showcase">
-    <Card className="cx-showcase-feature" ref={featureRef}>
+    <Card className={'cx-showcase-feature' + (project.preview ? '' : ' is-preview-unshared')} ref={featureRef}>
       <div className="cx-showcase-stage" aria-label={project.name + ' project preview'}>
         <div className="cx-showcase-picture">
           {project.preview
             ? <ClientPreviewThumb preview={project.preview} projectName={project.name} showBrowserBar={false} onOpen={() => onOpenPreview(project)} />
-            : <div className="cx-showcase-no-preview" role="status">There is still no preview.</div>}
+            : <div className="cx-showcase-no-preview cx-preview-glass" role="status">
+                <Monitor size={24} strokeWidth={1.5} aria-hidden="true" />
+                <span>Preview not shared yet</span>
+              </div>}
           <header className="cx-showcase-overlay">
             <p className="cx-showcase-eyebrow">Featured project · {selectedIndex + 1} of {projects.length}</p>
             <div className="cx-showcase-overlay-actions">
