@@ -138,8 +138,6 @@ export interface NavItem {
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  // Everything waiting on this person across projects: plans to approve, stopped builds, work to review, clients waiting.
-  { id: 'attention', label: 'Needs your attention', title: 'Needs your attention', subtitle: 'Everything waiting on you, across projects', group: 'primary', section: 'attention', icon: BellRing },
   { id: 'portal', label: 'Overview', labels: { client: 'My Projects' }, title: 'Overview', subtitle: 'Your requests, progress, and project status', group: 'primary', section: 'portal', icon: LayoutDashboard },
   // Chat is where developers, project managers and admins build with Alpha and the
   // agents, in the desktop app only (AI_NAV_TABS). Clients talk to the team in the portal.
@@ -148,8 +146,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'intake', label: 'New request', title: 'New Request', subtitle: 'Describe what you need in plain language', group: 'primary', section: 'requests', icon: PenLine },
 
   // The Inbox lists new inquiries, client requests and where each client project is waiting, in one
-  // place for the project manager. Inquiries is where one is answered: the Inbox, Needs your attention
-  // and Clients open it, so it is no longer a menu item of its own.
+  // place for the project manager. The Inbox and Clients open individual inquiries for a response.
   { id: 'inbox', label: 'Inbox', title: 'Inbox', subtitle: 'Everything clients and prospects have asked for', group: 'workspace', section: 'requests', icon: Mail },
   { id: 'inquiries', label: 'Inquiries', title: 'Inquiries', subtitle: 'Review requests that have not yet become a client project', group: 'workspace', section: 'requests', icon: Inbox, inMenus: false },
   { id: 'clients', label: 'Clients', title: 'Clients', subtitle: 'Clients, their projects and requests', group: 'workspace', section: 'clients', icon: Users },
@@ -173,6 +170,7 @@ export const NAV_ITEMS: NavItem[] = [
  * desired roles in ROLE_NAV_ALL.
  */
 export const ARCHIVED_NAV_ITEMS: NavItem[] = [
+  { id: 'attention', label: 'Needs your attention', title: 'Needs your attention', subtitle: 'Everything waiting on you, across projects', group: 'primary', section: 'attention', icon: BellRing },
   { id: 'documents', label: 'Specifications', labels: { client: 'Shared Documents' }, title: 'Specifications', subtitle: 'Requirement documents & acceptance criteria', group: 'workspace', section: 'communication', sectionByRole: { client: 'documents' }, icon: FileText },
   { id: 'deployments', label: 'CI/CD Platform', labels: { dev: 'CI/CD & Deployments', pm: 'Deployments', admin: 'Deployments' }, title: 'CI/CD Platform', subtitle: 'Release pipelines & preview builds', group: 'workspace', section: 'my_work', sectionByRole: { pm: 'operations', admin: 'operations' }, icon: Rocket }
 ];
@@ -214,14 +212,14 @@ export function navIcon(id: NavigationTab, className = 'w-4 h-4'): React.ReactNo
  */
 const ROLE_NAV_ALL: Record<UserRole, NavigationTab[]> = {
   client: ['portal', 'intake', 'settings'],
-  dev: ['issues', 'attention', 'projects', 'agents', 'skills', 'chat', 'settings'],
+  dev: ['issues', 'projects', 'agents', 'skills', 'chat', 'settings'],
   // Client work starts with the client and project conversation; inquiries remain separate pre-project intake.
   pm: [
-    'clients', 'attention', 'inbox', 'inquiries', 'projects', 'issues',
+    'clients', 'inbox', 'inquiries', 'projects', 'issues',
     'chat', 'agents', 'skills', 'analytics', 'settings'
   ],
   admin: [
-    'issues', 'attention', 'projects',
+    'issues', 'projects',
     'chat', 'agents', 'skills', 'analytics', 'operations', 'settings'
   ]
 };
