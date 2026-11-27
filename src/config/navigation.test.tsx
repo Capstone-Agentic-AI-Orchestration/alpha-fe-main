@@ -21,7 +21,7 @@ const withoutHiddenChat = (tabs: NavigationTab[]) => tabs.filter(tab => CHAT_TAB
 const existing: Record<UserRole, NavigationTab[]> = {
   client: ['portal', 'intake', 'settings'],
   dev: ['issues', 'projects', 'agents', 'skills', 'chat', 'settings'],
-  pm: ['clients', 'inbox', 'inquiries', 'projects', 'issues', 'chat', 'agents', 'skills', 'analytics', 'settings'],
+  pm: ['clients', 'inquiries', 'projects', 'issues', 'chat', 'agents', 'skills', 'analytics', 'settings'],
   admin: ['issues', 'projects', 'chat', 'agents', 'skills', 'analytics', 'operations', 'settings'],
 };
 /**
@@ -31,7 +31,7 @@ const existing: Record<UserRole, NavigationTab[]> = {
 const existingVisible: Record<UserRole, NavigationTab[]> = {
   client: ['portal', 'intake', 'settings'],
   dev: ['chat', 'issues', 'projects', 'agents', 'skills', 'settings'],
-  pm: ['chat', 'clients', 'issues', 'projects', 'inbox', 'agents', 'skills', 'analytics', 'settings'],
+  pm: ['chat', 'clients', 'issues', 'projects', 'inquiries', 'agents', 'skills', 'analytics', 'settings'],
   admin: ['chat', 'issues', 'projects', 'agents', 'skills', 'analytics', 'operations', 'settings'],
 };
 /** PMs start with their clients; the project conversation owns each project's tickets. */
@@ -57,16 +57,14 @@ describe('existing navigation compatibility', () => {
     expect(visible.every(tab => ROLE_NAV[role].includes(tab))).toBe(true);
     expect(visible.length).toBe(new Set(visible).size);
   });
-  it('opens Inquiries from the Inbox without listing it in the menus, and scopes tickets to project conversations', () => {
+  it('lists Inquiries in the menus now the Inbox is archived, and scopes tickets to project conversations', () => {
     expect(ROLE_NAV.pm).not.toContain('tickets');
-    // Reachable, so the Inbox and Clients can open an inquiry there.
+    // The only way in to new prospects' requests, so it is listed itself; Clients still opens one there.
     expect(ROLE_NAV.pm).toContain('inquiries');
     expect(sectionsFor('pm').flatMap(group => group.items.map(item => item.id))).not.toContain('tickets');
     expect(sectionsFor('pm').find(group => group.section.id === 'clients')?.items.map(item => item.id)).toEqual(['clients']);
-    expect(sectionsFor('pm').find(group => group.section.id === 'requests')?.items.map(item => item.id)).toEqual(['inbox']);
-    expect(sectionsFor('pm').flatMap(group => group.items.map(item => item.id))).not.toContain('inquiries');
-    expect(listedInMenus(navItem('inquiries'))).toBe(false);
-    expect(listedInMenus(navItem('inbox'))).toBe(true);
+    expect(sectionsFor('pm').find(group => group.section.id === 'requests')?.items.map(item => item.id)).toEqual(['inquiries']);
+    expect(listedInMenus(navItem('inquiries'))).toBe(true);
     for (const role of ['client', 'dev', 'admin'] as const) {
       expect(ROLE_NAV[role]).not.toContain('tickets');
       expect(ROLE_NAV[role]).not.toContain('inquiries');
@@ -117,8 +115,8 @@ describe('existing navigation compatibility', () => {
     }
     expect(sectionsFor('pm').map(group => group.section.id)).not.toContain('automation');
   });
-  it('archives attention and specifications on desktop and web', () => {
-    for (const tab of ['attention', 'documents'] as const) {
+  it('archives attention, the inbox and specifications on desktop and web', () => {
+    for (const tab of ['attention', 'inbox', 'documents'] as const) {
       expect(ARCHIVED_NAV_ITEMS.some(item => item.id === tab)).toBe(true);
       expect(NAV_ITEMS.some(item => item.id === tab)).toBe(false);
       for (const role of Object.keys(existing) as UserRole[]) expect(ROLE_NAV[role]).not.toContain(tab);
@@ -173,9 +171,9 @@ describe('AI tooling for project managers and admins is desktop-only', () => {
 
 describe('Clients section for project managers', () => {
   const ids = (role: UserRole, section: string) => sectionsFor(role).find(group => group.section.id === section)?.items.map(item => item.id) ?? [];
-  it('keeps clients, the inbox, tasks, and projects in their own navigation groups', () => {
+  it('keeps clients, inquiries, tasks, and projects in their own navigation groups', () => {
     expect(ids('pm', 'clients')).toEqual(['clients']);
-    expect(ids('pm', 'requests')).toEqual(['inbox']);
+    expect(ids('pm', 'requests')).toEqual(['inquiries']);
     expect(ids('pm', 'projects')).toEqual(['issues', 'projects']);
     expect(sectionsFor('pm').map(group => group.section.id)).not.toContain('delivery');
   });
