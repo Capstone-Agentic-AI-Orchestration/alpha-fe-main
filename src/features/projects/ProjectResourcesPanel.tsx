@@ -104,19 +104,10 @@ const HOSTING_HELP: Record<RepoShape, string> = {
   monorepo: 'Alpha hosts the backend on Render from apps/api and the frontend on Vercel from apps/web, and connects the two.'
 };
 
-const CREATES_NOTE: Record<RepoShape, string> = {
-  standalone:
-    'Creates the repository with a starter structure (package.json, tsconfig, lint, tests, a README and a CI workflow) on dev, uat and main branches. Work lands on dev.',
-  paired:
-    'Creates the repository with a starter structure (package.json, tsconfig, lint, tests, a README and a CI workflow) on dev, uat and main branches. Work lands on dev.',
-  monorepo:
-    'Creates the repository with both apps’ starter structure (package.json, tsconfig, lint, tests and a README each), a CI workflow per app, and dev, uat and main branches. Work lands on dev.'
-};
-
 const SHAPES: ReadonlyArray<{ value: RepoShape; label: string }> = [
   { value: 'standalone', label: 'Single repository' },
   { value: 'paired', label: 'Frontend + backend (paired)' },
-  { value: 'monorepo', label: 'Frontend + backend (one repository)' }
+  { value: 'monorepo', label: 'Monorepo' }
 ];
 
 /** Shape first: it decides what the name means and which stacks apply. */
@@ -147,14 +138,14 @@ export const ShapePicker: React.FC<{
               disabled={unavailable}
               className="peer sr-only"
             />
-            <span className="block rounded-lg px-2.5 py-1.5 text-center text-[11px] text-content-secondary transition-colors hover:text-content peer-checked:bg-surface-raised peer-checked:font-medium peer-checked:text-content peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-brand-400">
+            <span className="flex h-full min-h-9 items-center justify-center rounded-lg px-1.5 py-1.5 text-center text-xs leading-tight text-content-secondary transition-colors hover:text-content peer-checked:bg-selected peer-checked:font-medium peer-checked:text-selected-content peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-brand-400">
               {option.label}
             </span>
           </label>
         );
       })}
     </div>
-    {monorepo.reason && <p className="mt-1 text-[10px] text-content-muted">One-repository projects are unavailable: {monorepo.reason}</p>}
+    {monorepo.reason && <p className="mt-2 text-xs text-content-muted">{monorepo.reason}</p>}
   </fieldset>
 );
 
@@ -163,7 +154,7 @@ const MonorepoHint: React.FC<{ id: string; name: string }> = ({ id, name }) => (
   <p id={id} className="text-[11px] text-content-muted">
     Creates <code className="font-mono text-content-secondary">{name}</code> with the frontend in{' '}
     <code className="font-mono text-content-secondary">apps/web</code> and the backend in{' '}
-    <code className="font-mono text-content-secondary">apps/api</code>. Each app has its own tests, CI and hosting.
+    <code className="font-mono text-content-secondary">apps/api</code>.
   </p>
 );
 
@@ -491,17 +482,18 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
   };
 
   const hasLocalDir = resources.some(r => r.type === 'local_dir');
+  const showCreateRepository = isFull && !readOnly && canCreateRepository;
 
   return (
     <div className="space-y-3 text-xs">
       {/* Create a GitHub repository for this project */}
-      {isFull && !readOnly && canCreateRepository && (
-        <div className="p-3 rounded-xl bg-well border border-divider space-y-2.5">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-medium text-content-secondary flex items-center gap-1.5">
-              <GitBranch className="w-3.5 h-3.5 text-link" />
+      {showCreateRepository && (
+        <section aria-labelledby={`gh-create-heading-${projectId}`} className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h4 id={`gh-create-heading-${projectId}`} className="flex items-center gap-2 text-sm font-semibold text-content">
+              <GitBranch className="h-4 w-4 text-link" aria-hidden="true" />
               Create a GitHub repository
-            </span>
+            </h4>
             {ghAuth && (
               <span className="text-[10px] font-mono flex items-center gap-1.5">
                 <span
@@ -520,71 +512,62 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
               project. Alpha uses your own GitHub session and never stores a token.
             </p>
           ) : (
-            <>
+            <form className="space-y-4" onSubmit={event => { event.preventDefault(); void handleCreateRepo(); }}>
               <ShapePicker name={`gh-shape-${projectId}`} value={ghShape} onChange={setGhShape} disabled={ghBusy} monorepo={monorepo} />
 
-              <div className="flex items-center gap-2">
-                {orgLocked ? (
-                  // Settled for this project — a control that only ever has one
-                  // value is a label, so it reads as one.
-                  <span
-                    title="Every repository in this project belongs to this organization"
-                    className="bg-surface border border-divider rounded-xl px-2.5 py-1.5 text-xs font-mono text-content-secondary max-w-[11rem] truncate"
-                  >
-                    {githubOrg}
-                  </span>
-                ) : (
-                  <select
-                    value={ghOwner}
-                    onChange={(e) => setGhOwner(e.target.value)}
-                    disabled={ghBusy || ghOrgs.length === 0}
-                    title="Owning organization"
-                    className="bg-surface border border-control rounded-xl px-2.5 py-1.5 text-xs font-mono text-content focus:outline-none focus:border-control disabled:opacity-50 max-w-[11rem]"
-                  >
-                    <option value="" disabled>Organization…</option>
-                    {ghOrgs.map(o => (
-                      <option key={o.login} value={o.login}>{o.login}</option>
-                    ))}
-                  </select>
-                )}
-                <span className="text-xs text-content-muted flex-shrink-0">/</span>
-                <input
-                  type="text"
-                  value={ghRepoName}
-                  onChange={(e) => setGhRepoName(e.target.value.toLowerCase())}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      void handleCreateRepo();
-                    }
-                  }}
-                  placeholder={isPaired ? 'base-name' : 'repository-name'}
-                  aria-label={isPaired ? 'Base name for the paired repositories' : 'Repository name'}
-                  aria-describedby={ghShape === 'standalone' ? undefined : `gh-paired-hint-${projectId}`}
-                  disabled={ghBusy}
-                  className="flex-1 min-w-0 bg-surface border border-control rounded-xl px-3 py-1.5 text-xs font-mono text-content placeholder-content-muted focus:outline-none focus:border-control disabled:opacity-50"
-                />
-                <button
-                  type="button"
-                  onClick={handleCreateRepo}
-                  disabled={ghBusy || !ghRepoName.trim() || !effectiveOrg}
-                  className="px-3 py-1.5 rounded-xl bg-action hover:bg-action-hover text-xs font-medium text-on-action disabled:opacity-40 transition-colors flex-shrink-0"
-                >
-                  {ghBusy ? 'Creating…' : 'Create'}
-                </button>
+              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+                <div className="min-w-0 space-y-1.5">
+                  <label htmlFor={orgLocked ? undefined : `gh-owner-${projectId}`} className="block text-xs text-content-muted">
+                    Organization
+                  </label>
+                  {orgLocked ? (
+                    <span
+                      title={githubOrg}
+                      className="block h-9 truncate rounded-xl border border-divider bg-surface px-3 py-2 font-mono text-content-secondary"
+                    >
+                      {githubOrg}
+                    </span>
+                  ) : (
+                    <select
+                      id={`gh-owner-${projectId}`}
+                      value={ghOwner}
+                      onChange={(e) => setGhOwner(e.target.value)}
+                      disabled={ghBusy || ghOrgs.length === 0}
+                      className={`${selectClass} h-9 w-full font-mono focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-400`}
+                    >
+                      <option value="" disabled>Select organization</option>
+                      {ghOrgs.map(o => (
+                        <option key={o.login} value={o.login}>{o.login}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+                <div className="min-w-0 space-y-1.5">
+                  <label htmlFor={`gh-name-${projectId}`} className="block text-xs text-content-muted">
+                    {isPaired ? 'Repository base name' : 'Repository name'}
+                  </label>
+                  <input
+                    id={`gh-name-${projectId}`}
+                    type="text"
+                    value={ghRepoName}
+                    onChange={(e) => setGhRepoName(e.target.value.toLowerCase())}
+                    placeholder={isPaired ? 'base-name' : 'repository-name'}
+                    aria-describedby={ghShape === 'standalone' ? undefined : `gh-name-hint-${projectId}`}
+                    disabled={ghBusy}
+                    className="h-9 w-full rounded-xl border border-control bg-surface px-3 font-mono text-xs text-content placeholder-content-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-400 disabled:opacity-50"
+                  />
+                </div>
               </div>
 
               {isPaired && (
-                <p id={`gh-paired-hint-${projectId}`} className="text-[11px] text-content-muted">
+                <p id={`gh-name-hint-${projectId}`} className="text-xs text-content-muted">
                   Creates{' '}
                   <code className="font-mono text-content-secondary">{`${ghRepoName.trim() || 'name'}-fe`}</code> and{' '}
                   <code className="font-mono text-content-secondary">{`${ghRepoName.trim() || 'name'}-be`}</code>.
                 </p>
               )}
-              {isMonorepo && <MonorepoHint id={`gh-paired-hint-${projectId}`} name={ghRepoName.trim() || 'name'} />}
+              {isMonorepo && <MonorepoHint id={`gh-name-hint-${projectId}`} name={ghRepoName.trim() || 'name'} />}
 
-              {/* Stacks and visibility sit on their own row: the first already
-                  carries the owner, the name and the action. */}
               <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
                 {isMonorepo && ghOptions && (
                   <>
@@ -692,10 +675,6 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                 </div>
               </div>
 
-              <p className="text-[11px] text-content-muted">
-                {CREATES_NOTE[ghShape]}
-              </p>
-
               {/* With personal repositories removed, no organizations means no
                   creation at all — and the usual cause is a missing scope, not
                   a missing membership. Say which. */}
@@ -719,9 +698,19 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
               {ghError && (
                 <p role="alert" className="text-[11px] text-status-danger font-mono break-words">{ghError}</p>
               )}
-            </>
+
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  disabled={ghBusy || !ghRepoName.trim() || !effectiveOrg}
+                  className="w-full rounded-xl bg-action px-4 py-2 text-xs font-semibold text-on-action transition-colors hover:bg-action-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-400 disabled:opacity-40 sm:w-auto"
+                >
+                  {ghBusy ? 'Creating…' : isPaired ? 'Create repositories' : 'Create repository'}
+                </button>
+              </div>
+            </form>
           )}
-        </div>
+        </section>
       )}
 
       {/* What the last create made, and what it still needs from a person. */}
@@ -747,9 +736,10 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
       {variant === 'full' && <CheckoutSummary projectId={projectId} checkouts={checkouts} canBind={canBind} />}
 
       {/* Attached resources */}
+      {showCreateRepository && <hr className="border-divider" />}
       <div className={`space-y-2 overflow-y-auto ${deletingId ? 'max-h-[28rem]' : 'max-h-72'}`}>
         {resources.length === 0 ? (
-          <p className="p-3 text-content-muted italic bg-well rounded-xl border border-divider">
+          <p className={showCreateRepository ? 'text-xs text-content-muted' : 'p-3 text-content-muted italic bg-well rounded-xl border border-divider'}>
             {showAgentSetup
               ? 'No repositories yet. Add one below. Alpha downloads it to this computer the first time agents build.'
               : 'No repositories yet.'}
