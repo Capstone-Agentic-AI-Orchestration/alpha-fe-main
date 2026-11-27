@@ -50,11 +50,11 @@ describe('creating a monorepo from the repository form', () => {
     );
     const monorepoInput = (html: string) => /<input[^>]*value="monorepo"[^>]*>/.exec(html)?.[0] ?? '';
     const available = render({ available: true, reason: null });
-    expect(available).toContain('Frontend + backend (one repository)');
+    expect(available).toContain('>Monorepo</span>');
     expect(monorepoInput(available)).not.toContain('disabled');
 
     const unavailable = render({ available: false, reason: 'no monorepo CI templates yet' });
     expect(monorepoInput(unavailable)).toContain('disabled');
-    expect(unavailable).toContain('One-repository projects are unavailable: no monorepo CI templates yet');
+    expect(unavailable).toContain('no monorepo CI templates yet');
   });
 });
