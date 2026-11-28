@@ -737,9 +737,11 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
 
       {/* Attached resources */}
       {showCreateRepository && <hr className="border-divider" />}
-      <div className={`space-y-2 overflow-y-auto ${deletingId ? 'max-h-[28rem]' : 'max-h-72'}`}>
+      <div className={isFull
+        ? `space-y-2 overflow-y-auto ${deletingId ? 'max-h-[28rem]' : 'max-h-72'}`
+        : 'divide-y divide-divider'}>
         {resources.length === 0 ? (
-          <p className={showCreateRepository ? 'text-xs text-content-muted' : 'p-3 text-content-muted italic bg-well rounded-xl border border-divider'}>
+          <p className={showCreateRepository || !isFull ? 'text-xs text-content-muted' : 'p-3 text-content-muted italic bg-well rounded-xl border border-divider'}>
             {showAgentSetup
               ? 'No repositories yet. Add one below. Alpha downloads it to this computer the first time agents build.'
               : 'No repositories yet.'}
@@ -749,26 +751,40 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
             const repo = res.type === 'github_repo' ? repoNameWithOwner(res.pathOrUrl) : null;
             return (
               <div key={res.id}>
-                {/* One card per resource: the row, and for a repository whether this machine has it. */}
-                <div className="rounded-xl bg-surface border border-divider">
+                <div className={isFull ? 'rounded-xl bg-surface border border-divider' : undefined}>
                   <div
-                    className="flex items-center justify-between p-2.5 font-mono text-xs"
+                    className={isFull
+                      ? 'flex items-center justify-between p-2.5 font-mono text-xs'
+                      : 'flex flex-col items-start gap-2 py-2.5 sm:flex-row sm:items-center sm:justify-between'}
                   >
-                    <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="flex max-w-full min-w-0 items-center gap-2.5">
                       {res.type === 'github_repo' ? (
                         <div className="flex items-center gap-1.5 text-link min-w-0">
                           <GitBranch className="w-3.5 h-3.5 flex-shrink-0" />
-                          <span className="font-medium truncate">{res.pathOrUrl}</span>
+                          <span className="truncate font-medium" title={res.pathOrUrl}>{isFull ? res.pathOrUrl : repo ?? res.pathOrUrl}</span>
                         </div>
                       ) : (
                         <div className="flex items-center gap-1.5 text-status-warning min-w-0">
                           <Folder className="w-3.5 h-3.5 flex-shrink-0" />
-                          <span className="font-medium truncate">{res.pathOrUrl}</span>
+                          <span className="font-medium truncate" title={res.pathOrUrl}>{res.pathOrUrl}</span>
                         </div>
                       )}
-                      <span className="text-[10px] text-content-muted font-sans flex-shrink-0">({res.branchOrMachine})</span>
+                      {res.branchOrMachine && (
+                        <span className="shrink-0 rounded bg-surface px-1.5 py-0.5 font-mono text-[11px] text-content-secondary">{res.branchOrMachine}</span>
+                      )}
                     </div>
-                    <div className="flex items-center gap-1 flex-shrink-0">
+                    <div className="flex max-w-full shrink-0 flex-wrap items-center gap-1">
+                      {repo && !isFull && role === 'dev' && (
+                        <button
+                          type="button"
+                          onClick={() => setArchitectureRepo(repo)}
+                          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 font-sans text-xs text-link hover:bg-surface-high hover:text-link-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-400"
+                          aria-label={`View current architecture for ${repo}`}
+                        >
+                          <Network className="h-3.5 w-3.5" aria-hidden />
+                          View current architecture
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => navigator.clipboard.writeText(res.pathOrUrl)}
@@ -802,19 +818,6 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                       )}
                     </div>
                   </div>
-                  {repo && variant === 'inline' && role === 'dev' && (
-                    <div className="border-t border-divider px-2.5 py-2">
-                      <button
-                        type="button"
-                        onClick={() => setArchitectureRepo(repo)}
-                        className="inline-flex items-center gap-2 rounded-lg border border-divider bg-selected px-2.5 py-1.5 font-sans text-[11px] font-medium text-selected-content transition-colors hover:border-divider hover:bg-selected hover:text-content focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-400"
-                        aria-label={`View current architecture for ${repo}`}
-                      >
-                        <Network className="h-3.5 w-3.5" />
-                        View current architecture
-                      </button>
-                    </div>
-                  )}
                   {repo && isFull && (
                     <RepoCheckoutLine projectId={projectId} repo={repo} checkouts={checkouts} canBind={canBind} />
                   )}
