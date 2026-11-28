@@ -14,6 +14,8 @@ import { OPEN_INQUIRY_KEY, type OpenInquiry } from './PmInquiriesPage';
 import { PmClientConversationTab, PmRequestConversation, clientIdFromKey, type ConversationTaskDraft, type PmConversationFocus } from './PmClientConversation';
 import { LINKED_REQUEST_KEY, PROJECT_LOCKED_KEY } from './requestTaskLink';
 import { CLIENTS_CONVERSATION_FOCUS_KEY } from './TaskClientRequest';
+import { pmClientRemovalApi, removalSummary, type PmClientRemovalApi, type PmClientRemovalResult } from './clientRemovalApi';
+import { RemoveClientPanel } from './RemoveClientPanel';
 
 export type ClientSection = 'overview' | 'conversation' | 'tickets' | 'conversations' | 'documents' | 'proposals' | 'projects' | 'access';
 export const PM_CLIENTS_REFRESH_EVENT = 'alpha:pm-clients-refresh';
@@ -85,7 +87,7 @@ export function clientsSummary(clients: readonly PmClientSummary[]): string {
  * view locked to this client), the projects it can see, and its portal access.
  */
 export function PmClientsPage() {
-  const { activeWorkspace, projects, setActiveTab, activeTabId, setTabSessionState } = useApp();
+  const { activeWorkspace, projects, setActiveTab, activeTabId, setTabSessionState, showToast, refreshBoardState } = useApp();
   // Tab session state, so "View client" on a ticket can open a client here.
   const [selectedKey, setSelectedKey] = useTabSessionState<string | null>('clients.selected', null);
   const [section, setSection] = useTabSessionState<ClientSection>('clients.section', 'overview');
@@ -98,6 +100,12 @@ export function PmClientsPage() {
   return <PmClientsWorkspace workspaceKey={activeWorkspace?.id ?? 'none'} intakeEnabled={pmTicketsIntakeEnabled}
     workflowActions={workflowActions} selectedKey={selectedKey} onSelectKey={setSelectedKey} section={section} onSection={setSection}
     refreshTabId={activeTabId}
+    removalApi={pmClientRemovalApi}
+    onClientRemoved={result => {
+      showToast(`${result.displayName} removed`, removalSummary(result), result.signIn === 'retired' || result.signIn === 'kept_other_access' ? 'success' : 'error');
+      // Their projects were archived on the server; bring the project lists up to date.
+      void refreshBoardState();
+    }}
     knownProjectIds={knownProjectIds} onOpenProject={projectId => { setConversationFocus({ projectId }); setSection('conversation'); }}
     onOpenInquiries={inquiry => { setOpenInquiry(inquiry ?? null); setActiveTab('inquiries'); }}
     conversationFocus={conversationFocus} onConversationFocusHandled={() => setConversationFocus(null)}
@@ -119,7 +127,7 @@ export function PmClientsPage() {
  */
 export function PmClientsWorkspace({ api = pmTicketApi, documentsApi = pmTicketDocumentsApi, workspaceKey, intakeEnabled = true,
   workflowActions = 'all', selectedKey, onSelectKey, section, onSection, knownProjectIds, onOpenProject, onOpenInquiries, refreshToken,
-  refreshTabId, conversationFocus: externalFocus = null, onConversationFocusHandled, onCreateTask }: {
+  refreshTabId, conversationFocus: externalFocus = null, onConversationFocusHandled, onCreateTask, removalApi, onClientRemoved }: {
   api?: typeof pmTicketApi;
   documentsApi?: TicketDocumentsReadApi;
   workspaceKey: string;
@@ -141,6 +149,9 @@ export function PmClientsWorkspace({ api = pmTicketApi, documentsApi = pmTicketD
   onConversationFocusHandled?: () => void;
   /** Opens the New task dialog from the conversation; absent in the UI preview. */
   onCreateTask?: (draft: ConversationTaskDraft) => void;
+  /** Removing a client from its Access tab; absent in the UI preview. */
+  removalApi?: PmClientRemovalApi;
+  onClientRemoved?: (result: PmClientRemovalResult) => void;
 }) {
   const [clients, setClients] = useState<PmClientSummary[] | null>(null);
   const [error, setError] = useState('');
@@ -268,7 +279,12 @@ export function PmClientsWorkspace({ api = pmTicketApi, documentsApi = pmTicketD
       error={conversationsError} onOpenRequest={openRequest} />}
     renderDocuments={() => <ClientDocuments requests={requests} documentsApi={documentsApi} onOpenRequest={openRequest} />}
     renderProposals={() => <ClientProposals proposals={proposals} error={proposalsError} onOpenInquiries={onOpenInquiries} />}
-    renderProjects={client => <ClientProjects client={client} projects={projectDetails} knownProjectIds={knownProjectIds} onOpenProject={onOpenProject} />} />;
+    renderProjects={client => <ClientProjects client={client} projects={projectDetails} knownProjectIds={knownProjectIds} onOpenProject={onOpenProject} />}
+    renderAccessActions={removalApi ? client => <RemoveClientPanel api={removalApi} client={client} onRemoved={result => {
+      onSelectKey(null);
+      refresh();
+      onClientRemoved?.(result);
+    }} /> : undefined} />;
 }
 
 export interface PmClientsViewProps {
@@ -302,11 +318,13 @@ export interface PmClientsViewProps {
   renderProposals?: (client: PmClientSummary) => ReactNode;
   /** Replaces the plain project list, as with preview links and feedback. */
   renderProjects?: (client: PmClientSummary) => ReactNode;
+  /** Under the Access tab, e.g. removing the client. */
+  renderAccessActions?: (client: PmClientSummary) => ReactNode;
 }
 
 /** The Clients list and a client's page, from props alone. */
 export function PmClientsView({ clients, error, loading, search, onSearch, selectedKey, onSelect, section, onSection,
-  needsYouOnly = false, onNeedsYouOnly, renderProjects, renderProposals,
+  needsYouOnly = false, onNeedsYouOnly, renderProjects, renderProposals, renderAccessActions,
   knownProjectIds, onOpenProject, onOpenInquiries, renderTickets, renderOverview, renderConversation, renderConversations, renderDocuments }: PmClientsViewProps) {
   const selected = clients?.find(client => client.key === selectedKey) ?? null;
   const visible = useMemo(() => filterClients(clients ?? [], search, needsYouOnly), [clients, search, needsYouOnly]);
@@ -400,6 +418,7 @@ export function PmClientsView({ clients, error, loading, search, onSearch, selec
             Access was removed on {plural(selected.tickets.accessRevoked, 'request')}. The client can’t open {selected.tickets.accessRevoked === 1 ? 'it' : 'them'}.
           </p>}
           <p className="text-xs text-content-muted">{unified ? 'For project tickets, expand the ticket under Conversation to manage invitations and access.' : 'Invitations and access are managed on each request in the Tickets tab.'}</p>
+          {renderAccessActions?.(selected)}
         </div>}
       </div>
     </div>;

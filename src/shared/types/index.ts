@@ -796,6 +796,26 @@ export interface Project {
   milestones?: Milestone[];
   completedAt?: string;
   createdAt?: string;
+  /**
+   * When the project was archived, and by whom. An archived project is off the
+   * project lists and its repositories are read-only on GitHub; Restore brings
+   * both back. Set only by the archive and restore actions.
+   */
+  archivedAt?: string;
+  archivedBy?: string;
+}
+
+/** What archiving or restoring a project did to one of its repositories on GitHub. */
+export interface RepoArchiveOutcome {
+  repo: string;
+  state: 'archived' | 'already_archived' | 'restored' | 'already_active' | 'not_found' | 'failed';
+  error?: string;
+}
+
+/** `POST /projects/:id/archive` and `/restore`. */
+export interface ProjectArchiveResult {
+  project: Project;
+  repositories: RepoArchiveOutcome[];
 }
 
 export type BuildStepPhase =

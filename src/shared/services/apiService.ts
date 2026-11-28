@@ -83,6 +83,7 @@ import {
   HostingEnvList,
   EnvChangeResult,
   RepoDeletionResult,
+  ProjectArchiveResult,
   ProjectOrchestrationAutonomy,
   ProjectOrchestrationSettings
 } from '@/shared/types';
@@ -719,8 +720,21 @@ export const apiService = {
     }),
   updateProject: (id: string, updates: Partial<Project>) =>
     fetchJson<Project>(`/projects/${id}`, { method: 'PUT', body: JSON.stringify(updates) }),
-  deleteProject: (id: string) =>
-    fetchJson<{ success: boolean }>(`/projects/${id}`, { method: 'DELETE' }),
+  /**
+   * Delete a project. With `repositoriesConfirm` (the project key, typed by the
+   * PM) its repositories go too, each with its hosting, before the project.
+   */
+  deleteProject: (id: string, options?: { repositoriesConfirm?: string }) => {
+    const withRepositories = options?.repositoriesConfirm
+      ? '?repositories=delete&confirm=' + encodeURIComponent(options.repositoriesConfirm)
+      : '';
+    return fetchJson<{ success: boolean; repositories?: RepoDeletionResult[] }>(`/projects/${id}${withRepositories}`, { method: 'DELETE' });
+  },
+  /** Archive a project and its repositories on GitHub; Restore undoes both. */
+  archiveProject: (id: string) =>
+    fetchJson<ProjectArchiveResult>(`/projects/${encodeURIComponent(id)}/archive`, { method: 'POST' }),
+  restoreProject: (id: string) =>
+    fetchJson<ProjectArchiveResult>(`/projects/${encodeURIComponent(id)}/restore`, { method: 'POST' }),
 
   // Agents
   getAgents: async (): Promise<Agent[]> => {
