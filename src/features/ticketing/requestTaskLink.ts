@@ -3,8 +3,14 @@ import { pmTicketApi } from './pmApi';
 
 /** The New task dialog's tab-session key for the client request a new task is for. */
 export const LINKED_REQUEST_KEY = 'issueModal.linkedRequest';
-/** A request-specific shortcut fixes the link; the task dialog allows the PM to edit it. */
-export interface LinkedRequestDraft { ticketId: string; title: string; reference?: string; source: 'conversation' | 'task_dialog' }
+/**
+ * A request-specific shortcut fixes the link; the task dialog allows the PM to edit it.
+ * `description` is the client's wording, offered in the dialog but never copied in by default:
+ * the request is the whole brief, and each task under it is one piece of that work.
+ */
+export interface LinkedRequestDraft {
+  ticketId: string; title: string; reference?: string; description?: string; source: 'conversation' | 'task_dialog';
+}
 /** Set when the dialog opens from a project's conversation: the task's project is that project, not a choice. */
 export const PROJECT_LOCKED_KEY = 'issueModal.projectLocked';
 

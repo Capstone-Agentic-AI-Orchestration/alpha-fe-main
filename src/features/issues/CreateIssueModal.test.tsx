@@ -88,4 +88,18 @@ describe('New task dialog', () => {
     expect(html).toContain('Enter a task name first.');
     expect(html).toContain('disabled:cursor-default');
   });
+
+  it('starts a task for a client request blank, with the client’s wording one click away', () => {
+    const wording = 'I need a clean, mobile-friendly informational website for my laundry shop.';
+    sessionValues = { 'issueModal.linkedRequest': { ticketId: 't-1', title: 'Informational website', description: wording, source: 'conversation' } };
+    const html = render();
+    expect(html).toContain('One piece of the request');
+    expect(html).toContain('Use the client’s wording');
+    expect(html).not.toContain(wording);
+    sessionValues['issueModal.description'] = wording;
+    expect(render()).not.toContain('Use the client’s wording');
+    sessionValues = { 'issueModal.linkedRequest': { ticketId: 't-1', title: 'Informational website', source: 'task_dialog' } };
+    expect(render()).not.toContain('Use the client’s wording');
+    sessionValues = {};
+  });
 });

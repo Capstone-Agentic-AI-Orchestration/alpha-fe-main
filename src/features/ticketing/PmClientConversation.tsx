@@ -118,7 +118,7 @@ function stageCardText(summary: StageSummary): { title: string; prompt: string |
 }
 
 /** Only a client's request gets "Create task"; ordinary messages do not. */
-function requestCardActions(onCreate: ((request: { ticketId: string; title: string; reference?: string }, description: string) => void) | undefined) {
+function requestCardActions(onCreate: ((request: { ticketId: string; title: string; reference?: string }, wording: string) => void) | undefined) {
   if (!onCreate) return undefined;
   return (item: ConversationItem): ReactNode => {
     const request = item.kind === 'request' ? item.request : null;
@@ -236,9 +236,11 @@ export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTi
 
   const newTask = (projectId: string) => {
     const request = contextRequest && !['declined', 'cancelled'].includes(contextRequest.checklist) ? contextRequest : null;
+    // A task is one piece of the request: it starts blank, linked to the request, with the client's wording on offer.
     onCreateTask?.({
-      projectId, title: request?.title.slice(0, 160) ?? '', description: request?.description ?? '',
-      request: request && { ticketId: request.ticketId, title: request.title, reference: request.reference, source: 'task_dialog' },
+      projectId, title: '', description: '',
+      request: request && { ticketId: request.ticketId, title: request.title, reference: request.reference,
+        description: request.description, source: 'task_dialog' },
     });
   };
   const newTaskButton = project && onCreateTask && <Button type="button" variant="ghost" size="sm" disabled={busy}
@@ -346,8 +348,8 @@ export function PmRequestConversation({ api = pmTicketApi, projectId, clientId, 
     }).catch(error_ => setActionError(errorText(error_, 'The message was not sent.'))).finally(() => setBusy(false));
   };
   const createTask = onCreateTask
-    ? (request: { ticketId: string; title: string; reference?: string }, description: string) => onCreateTask({ projectId, title: request.title.slice(0, 160), description,
-      request: { ticketId: request.ticketId, title: request.title, reference: request.reference, source: 'conversation' } })
+    ? (request: { ticketId: string; title: string; reference?: string }, wording: string) => onCreateTask({ projectId, title: '', description: '',
+      request: { ticketId: request.ticketId, title: request.title, reference: request.reference, description: wording, source: 'conversation' } })
     : undefined;
 
   return <ProjectConversationChat role="pm" items={items} requests={requests} error={error} actionError={actionError}
