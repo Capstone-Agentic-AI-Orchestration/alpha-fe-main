@@ -30,7 +30,8 @@ import {
   Milestone,
   Identity,
   IdentityStatus,
-  WorkspaceSummary
+  WorkspaceSummary,
+  ProjectArchiveResult
 } from '@/shared/types';
 import {
   defaultSettings,
@@ -174,10 +175,20 @@ interface AppContextType {
   loadRunDetail: (runId: string) => void;
   
   // Projects
+  /** Active projects. Archived ones are in `archivedProjects`, off every list and board. */
   projects: Project[];
+  archivedProjects: Project[];
   createProject: (project: Omit<Project, 'id' | 'totalIssues' | 'completedIssues' | 'progressPercentage' | 'milestones'>) => Promise<Project>;
   updateProject: (id: string, updates: Partial<Project>) => Promise<boolean>;
-  deleteProject: (id: string) => void;
+  /**
+   * Delete a project once the server confirms. `repositoriesConfirm` (its key)
+   * deletes its repositories and their hosting first. Resolves false on failure,
+   * after a toast saying why.
+   */
+  deleteProject: (id: string, options?: { repositoriesConfirm?: string }) => Promise<boolean>;
+  /** Archive a project and its repositories; null on failure, after a toast. */
+  archiveProject: (id: string) => Promise<ProjectArchiveResult | null>;
+  restoreProject: (id: string) => Promise<ProjectArchiveResult | null>;
   
   // Agents
   agents: Agent[];
@@ -2621,19 +2632,54 @@ ${e.detail}`;
     }
   };
 
-  const deleteProject = (id: string) => {
-    if (!requireCapability('manage_projects')) return;
-    const removed = projects.find(p => p.id === id);
-    setProjects(prev => prev.filter(p => p.id !== id));
-    persist(
-      () => apiService.deleteProject(id),
-      () => {},
-      msg => {
-        // Put it back: the server still has it, so hiding it would lie.
-        if (removed) setProjects(prev => [removed, ...prev]);
-        showToast('Project not deleted', msg, 'error');
-      }
-    );
+  // Not optimistic: deleting repositories takes a while and can stop part-way,
+  // and the dialog shows progress until the server has answered.
+  const deleteProject = async (id: string, options: { repositoriesConfirm?: string } = {}): Promise<boolean> => {
+    if (!requireCapability('manage_projects')) return false;
+    try {
+      await apiService.deleteProject(id, options.repositoriesConfirm ? { repositoriesConfirm: options.repositoriesConfirm } : undefined);
+      setProjects(prev => prev.filter(p => p.id !== id));
+      // The server deleted its tasks with it.
+      setIssues(prev => prev.filter(issue => issue.projectId !== id));
+      return true;
+    } catch (err) {
+      showToast('Project not deleted', describeWriteError(err), 'error');
+      return false;
+    }
+  };
+
+  const applyArchiveResult = (id: string, result: ProjectArchiveResult) => {
+    setProjects(prev => prev.map(project => project.id === id
+      ? { ...project, archivedAt: result.project.archivedAt, archivedBy: result.project.archivedBy }
+      : project));
+    const failed = result.repositories.filter(outcome => outcome.state === 'failed');
+    if (failed.length) {
+      showToast('Some repositories were not changed', failed.map(outcome => outcome.error ?? outcome.repo).join(' '), 'error');
+    }
+  };
+
+  const archiveProject = async (id: string): Promise<ProjectArchiveResult | null> => {
+    if (!requireCapability('manage_projects')) return null;
+    try {
+      const result = await apiService.archiveProject(id);
+      applyArchiveResult(id, result);
+      return result;
+    } catch (err) {
+      showToast('Project not archived', describeWriteError(err), 'error');
+      return null;
+    }
+  };
+
+  const restoreProject = async (id: string): Promise<ProjectArchiveResult | null> => {
+    if (!requireCapability('manage_projects')) return null;
+    try {
+      const result = await apiService.restoreProject(id);
+      applyArchiveResult(id, result);
+      return result;
+    } catch (err) {
+      showToast('Project not restored', describeWriteError(err), 'error');
+      return null;
+    }
   };
 
   // Agents
@@ -3887,22 +3933,28 @@ ${e.detail}`;
     });
   }, [projects, requirementDocs, role, currentUser, users]);
 
+  /** Archived projects leave every list and board; the Projects page lists them on request. */
+  const activeProjects = useMemo(() => scopedProjects.filter(project => !project.archivedAt), [scopedProjects]);
+  const archivedProjects = useMemo(() => scopedProjects.filter(project => project.archivedAt), [scopedProjects]);
+  const archivedProjectIds = useMemo(() => new Set(archivedProjects.map(project => project.id)), [archivedProjects]);
+
   /** The projects this person may work in, as the server marks them
    * (`assigned`): every PM-owned project for the workspace's team, and only
    * assigned ones for a client. */
   const assignedProjectIds = useMemo(
-    () => new Set(scopedProjects.filter(project => project.assigned !== false).map(project => project.id)),
-    [scopedProjects]
+    () => new Set(activeProjects.filter(project => project.assigned !== false).map(project => project.id)),
+    [activeProjects]
   );
 
   /** Clients never see internal issues; developers see issues in assigned projects. */
   const scopedIssues = useMemo(() => {
     // Archived tasks are off every board; Archived loads them on request.
-    const onBoard = issues.filter(issue => !issue.archivedAt);
+    // So are the tasks of an archived project.
+    const onBoard = issues.filter(issue => !issue.archivedAt && !archivedProjectIds.has(issue.projectId));
     if (role === 'admin') return onBoard;
     if (role === 'client') return [];
     return onBoard.filter(issue => assignedProjectIds.has(issue.projectId));
-  }, [issues, assignedProjectIds, role]);
+  }, [issues, assignedProjectIds, archivedProjectIds, role]);
 
   /** Specifications: a client sees only their own; staff see their projects'. */
   const scopedDocs = useMemo(() => {
@@ -4044,10 +4096,13 @@ ${e.detail}`;
       cancelPrototypeRun,
       retryPrototypeRun,
       loadRunDetail,
-      projects: scopedProjects,
+      projects: activeProjects,
+      archivedProjects,
       createProject,
       updateProject,
       deleteProject,
+      archiveProject,
+      restoreProject,
       agents: scopedAgents,
       createAgent,
     importAgent,

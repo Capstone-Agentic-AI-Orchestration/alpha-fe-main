@@ -11,13 +11,14 @@ import {
   ArrowUp,
   Check,
   Edit3,
-  Trash2,
+  Archive,
   Flame,
   Minus,
   Workflow,
   ChevronLeft,
 } from 'lucide-react';
 import { CreateProjectModal } from '@/features/projects/CreateProjectModal';
+import { ArchivedProjects, ProjectRemovalDialog } from '@/features/projects/ProjectRemovalDialog';
 import { ProjectResourcesPanel } from '@/features/projects/ProjectResourcesPanel';
 import { ProjectMemorySection } from '@/features/projects/ProjectMemorySection';
 import { ProjectAutonomySection } from '@/features/projects/ProjectAutonomySection';
@@ -43,9 +44,12 @@ interface ProjectsViewProps {
 export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) => {
   const {
     projects,
+    archivedProjects,
     issues,
     updateProject,
     deleteProject,
+    archiveProject,
+    restoreProject,
     showToast,
 
 
@@ -71,6 +75,8 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
   // Modals
   const [createModalOpen, setCreateModalOpen] = useState<boolean>(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+  // The project being archived or deleted, and whether its dialog opens on Delete.
+  const [removal, setRemoval] = useState<{ project: Project; choice: 'archive' | 'delete' } | null>(null);
   const [savingProject, setSavingProject] = useState(false);
   const [resourcesModalOpen, setResourcesModalOpen] = useState<boolean>(false);
   const [buildReviewOpen, setBuildReviewOpen] = useState(false);
@@ -214,6 +220,30 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
       </div>
     );
   };
+
+  const removalDialog = removal && (
+    <ProjectRemovalDialog
+      key={removal.project.id}
+      project={removal.project}
+      initialChoice={removal.choice}
+      canDeleteRepositories={canProvisionRepositories}
+      onClose={() => setRemoval(null)}
+      onArchive={async () => {
+        const result = await archiveProject(removal.project.id);
+        if (!result) return false;
+        if (selectedProjectId === removal.project.id) setSelectedProjectId(null);
+        showToast('Project archived', `${removal.project.name} is under Archived on the Projects page.`, 'success');
+        return true;
+      }}
+      onDelete={async repositoriesConfirm => {
+        const deleted = await deleteProject(removal.project.id, { repositoriesConfirm });
+        if (!deleted) return false;
+        if (selectedProjectId === removal.project.id) setSelectedProjectId(null);
+        showToast('Project deleted', repositoriesConfirm ? `${removal.project.name} and its repositories were deleted.` : `${removal.project.name} was deleted.`, 'success');
+        return true;
+      }}
+    />
+  );
 
   // =========================================================================
   // VIEW 1: PROJECT WORKSPACE
@@ -556,19 +586,20 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
               </div>
 
               <div className="flex items-center justify-between pt-4 border-t border-divider">
-                <button
-                  type="button"
-                  disabled={savingProject}
-                  onClick={() => {
-                    deleteProject(editingProject.id);
-                    setSelectedProjectId(null);
-                    setEditingProject(null);
-                  }}
-                  className="flex items-center gap-1 text-status-danger hover:text-status-danger"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Delete Project</span>
-                </button>
+                {canManageProjects ? (
+                  <button
+                    type="button"
+                    disabled={savingProject}
+                    onClick={() => {
+                      setRemoval({ project: editingProject, choice: 'archive' });
+                      setEditingProject(null);
+                    }}
+                    className="flex items-center gap-1 text-status-danger hover:text-status-danger"
+                  >
+                    <Archive className="w-3.5 h-3.5" />
+                    <span>Archive or delete…</span>
+                  </button>
+                ) : <span />}
 
                 <div className="flex items-center gap-2">
                   <button
@@ -592,6 +623,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
           </Modal>
         )}
 
+        {removalDialog}
       </div>
     );
   }
@@ -876,6 +908,17 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
       )}
 
       {/* ================= CREATE PROJECT MODAL ================= */}
+      <ArchivedProjects
+        projects={archivedProjects}
+        canManage={canManageProjects}
+        onRestore={async project => {
+          const result = await restoreProject(project.id);
+          if (result) showToast('Project restored', `${project.name} is back on the project list.`, 'success');
+        }}
+        onDelete={project => setRemoval({ project, choice: 'delete' })}
+      />
+      {removalDialog}
+
       <CreateProjectModal
         isOpen={createModalOpen && canManageProjects}
         onClose={() => setCreateModalOpen(false)}
