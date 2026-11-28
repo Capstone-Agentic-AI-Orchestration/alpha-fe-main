@@ -1,7 +1,7 @@
 import './pmTickets.css';
 import { PmQueueSelect } from './PmQueueSelect';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { AlertCircle, ArrowLeft, CalendarDays, CheckCircle2, Copy, FolderPlus, Inbox, Rocket, Mail, MessageSquare, PanelLeftOpen, RefreshCw, Search, Send, UserRound, XCircle } from 'lucide-react';
+import { AlertCircle, ArrowLeft, CalendarDays, CheckCircle2, Copy, FolderPlus, Inbox, Rocket, Mail, MessageSquare, PanelLeftClose, PanelLeftOpen, RefreshCw, Search, Send, UserRound, XCircle } from 'lucide-react';
 import { acceptOutcome, handledOutcome, inquiryContact, inquiryFor, inquiryKind, inquiryStatus, shortReference } from './inquiryPresentation';
 import { Button } from '@/shared/components/ui/button';
 import { Skeleton, SkeletonRegion } from '@/shared/components/ui/skeleton';
@@ -365,17 +365,20 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
     </div> : !workspaceCanReview ? <div className="pm-inquiries__notice rounded-xl border border-status-warning-border bg-status-warning-subtle p-4 text-sm text-status-warning">
       PM access is required to review inquiries.
     </div> : <div className="pm-inquiries__shell">
-      {selected && <aside className="pm-inquiries__navigation" aria-label="Inquiry views" title="Click empty sidebar space to collapse or expand"
+      {selected && <aside className="pm-inquiries__navigation" aria-label="Inquiry views" title={navigationCollapsed ? 'Show the inquiry list' : undefined}
+        // Collapsing is the button's job; a click anywhere on the slim rail opens it again.
         onClick={event => {
-          if (event.target instanceof Element && event.target.closest('button, a, select, input, textarea')) return;
-          setNavigationCollapsed(value => !value);
+          if (!navigationCollapsed || (event.target instanceof Element && event.target.closest('button, a, select, input, textarea'))) return;
+          setNavigationCollapsed(false);
         }}>
         <header className="pm-inquiries__navigation-heading">
           <div className="pm-inquiries__navigation-title"><Inbox size={17} aria-hidden="true" /><span>Inquiries</span></div>
-          {navigationCollapsed && <button type="button" className="pm-inquiries__navigation-expand" aria-label="Show inquiry navigation" title="Show inquiry navigation"
-            onClick={event => { event.stopPropagation(); setNavigationCollapsed(false); }}>
-            <PanelLeftOpen size={16} aria-hidden="true" /><span className="sr-only">Show inquiry navigation</span>
-          </button>}
+          <button type="button" className="pm-inquiries__navigation-toggle" aria-expanded={!navigationCollapsed}
+            aria-label={navigationCollapsed ? 'Show the inquiry list' : 'Hide the inquiry list'}
+            title={navigationCollapsed ? 'Show the inquiry list' : 'Hide the inquiry list'}
+            onClick={event => { event.stopPropagation(); setNavigationCollapsed(value => !value); }}>
+            {navigationCollapsed ? <PanelLeftOpen size={16} aria-hidden="true" /> : <PanelLeftClose size={16} aria-hidden="true" />}
+          </button>
         </header>
         {statusControls('pm-inquiries__status-toggle--sidebar')}
         <nav className="pm-inquiries__chat-list" aria-label="Inquiry conversations">
