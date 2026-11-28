@@ -2639,6 +2639,8 @@ ${e.detail}`;
     try {
       await apiService.deleteProject(id, options.repositoriesConfirm ? { repositoriesConfirm: options.repositoriesConfirm } : undefined);
       setProjects(prev => prev.filter(p => p.id !== id));
+      // The server deleted its tasks with it.
+      setIssues(prev => prev.filter(issue => issue.projectId !== id));
       return true;
     } catch (err) {
       showToast('Project not deleted', describeWriteError(err), 'error');
