@@ -12,7 +12,6 @@ import {
   Check,
   Edit3,
   Trash2,
-  GitBranch,
   Flame,
   Minus,
   Workflow,
@@ -22,6 +21,7 @@ import { CreateProjectModal } from '@/features/projects/CreateProjectModal';
 import { ProjectResourcesPanel } from '@/features/projects/ProjectResourcesPanel';
 import { ProjectMemorySection } from '@/features/projects/ProjectMemorySection';
 import { ProjectAutonomySection } from '@/features/projects/ProjectAutonomySection';
+import { ProjectSettingsSection } from '@/features/projects/ProjectSettingsSection';
 import { IssuesView } from '@/features/issues/IssuesView';
 import { ProjectRepositoryView } from '@/features/projects/repository/ProjectRepositoryView';
 import { ProjectStageStrip } from '@/features/projects/ProjectStageStrip';
@@ -288,60 +288,37 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
             />
           )}
           settings={(
-            <div className="mx-auto grid max-w-6xl gap-4 text-xs lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-              <div className="space-y-4">
-                <section aria-labelledby="project-about" className="rounded-xl border border-divider bg-surface-raised p-4">
-                  <div className="mb-3 flex items-center justify-between gap-2">
-                    <h2 id="project-about" className="text-[13px] font-semibold text-content">About this project</h2>
-                    {canEditProjects && (
-                      <button type="button" onClick={() => setEditingProject(selectedProject)} className="inline-flex items-center gap-1 text-content-secondary hover:text-content">
-                        <Edit3 className="h-3 w-3" aria-hidden />Edit project
-                      </button>
-                    )}
+            <div className="w-full min-w-0 divide-y divide-divider text-sm">
+              <ProjectSettingsSection id="project-about" title="About this project" action={canEditProjects && (
+                <button type="button" onClick={() => setEditingProject(selectedProject)} className="inline-flex min-h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-link hover:bg-surface-high hover:text-link-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-400">
+                  <Edit3 className="h-3.5 w-3.5" aria-hidden />Edit project
+                </button>
+              )}>
+                <dl className="grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-4">
+                  <div>
+                    <dt className="text-xs text-content-muted">Status</dt>
+                    <dd className="mt-1 font-medium capitalize text-content">{selectedProject.status.replace('_', ' ')}</dd>
                   </div>
-                  <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-3">
-                    <dt className="text-content-muted">Status</dt>
-                    <dd className="capitalize text-content">{selectedProject.status.replace('_', ' ')}</dd>
-                    <dt className="text-content-muted">Priority</dt>
-                    <dd className="capitalize text-content">{selectedProject.priority || 'Medium'}</dd>
-                    <dt className="text-content-muted">Target date</dt>
-                    <dd className="text-content">{selectedProject.targetDate || 'No deadline'}</dd>
-                    <dt className="text-content-muted">Progress</dt>
-                    <dd className="text-content">{doneCount} of {totalCount} tasks done</dd>
-                  </dl>
-                </section>
-                <section aria-labelledby="project-rules" className="rounded-xl border border-divider bg-surface-raised p-4">
-                  <h2 id="project-rules" className="mb-1 text-[13px] font-semibold text-content">Ground rules and context</h2>
-                  <p className="mb-3 text-content-muted">Every build in this project follows these.</p>
-                  <p className="select-text whitespace-pre-wrap break-words rounded-lg border border-divider bg-well p-3 font-mono text-[11px] leading-relaxed text-content-secondary">
-                    {selectedProject.description || 'No ground rules yet.'}
-                  </p>
-                </section>
-                {/* What every agent reads first; for the project team, never clients. */}
-                {role !== 'client' && <ProjectMemorySection key={selectedProject.id} projectId={selectedProject.id} />}
-                {/* How far Alpha fixes a stuck build on its own: the team's setting, never shown to clients. */}
-                {showBuildSettings && orchestrationSettings?.autonomy && (
-                  <ProjectAutonomySection key={selectedProject.id} projectId={selectedProject.id} settings={orchestrationSettings}
-                    canEdit={canEditProjects} onSaved={setOrchestrationSettings} />
-                )}
-                {showBuildSettings && orchestrationSettings && !orchestrationSettings.available && (
-                  <p role="status" className="rounded-xl border border-status-warning-border bg-status-warning-subtle p-3 text-status-warning">
-                    Builds cannot run on this desktop: {orchestrationSettings.reason ?? 'the build service is unavailable.'}
-                  </p>
-                )}
-              </div>
-              <section aria-labelledby="project-repos" className="rounded-xl border border-divider bg-surface-raised p-4">
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                  <h2 id="project-repos" className="flex items-center gap-1.5 text-[13px] font-semibold text-content">
-                    <GitBranch className="h-3.5 w-3.5 text-status-info" aria-hidden />Repositories
-                  </h2>
-                  {canEditProjects && (
-                    <button type="button" onClick={() => setResourcesModalOpen(true)} className="inline-flex items-center gap-1 text-content-secondary hover:text-content">
-                      <Plus className="h-3 w-3" aria-hidden />
-                      {canProvisionRepositories ? 'Add repository' : 'Attach existing'}
-                    </button>
-                  )}
-                </div>
+                  <div>
+                    <dt className="text-xs text-content-muted">Priority</dt>
+                    <dd className="mt-1 font-medium capitalize text-content">{selectedProject.priority || 'Medium'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-content-muted">Target date</dt>
+                    <dd className="mt-1 font-medium text-content">{selectedProject.targetDate || 'No deadline'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-content-muted">Progress</dt>
+                    <dd className="mt-1 font-medium tabular-nums text-content">{doneCount} of {totalCount} tasks done</dd>
+                  </div>
+                </dl>
+              </ProjectSettingsSection>
+              <ProjectSettingsSection id="project-repos" title="Repositories" action={canEditProjects && (
+                <button type="button" onClick={() => setResourcesModalOpen(true)} className="inline-flex min-h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-link hover:bg-surface-high hover:text-link-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-400">
+                  <Plus className="h-3.5 w-3.5" aria-hidden />
+                  {canProvisionRepositories ? 'Add repository' : 'Attach existing'}
+                </button>
+              )}>
                 <ProjectResourcesPanel
                   variant="inline"
                   projectId={selectedProject.id}
@@ -350,7 +327,22 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                   readOnly={!canEditProjects}
                   canCreateRepository={canProvisionRepositories}
                 />
-              </section>
+              </ProjectSettingsSection>
+              <ProjectSettingsSection id="project-rules" title="Ground rules and context" description="Every build in this project follows these.">
+                <p className="max-w-prose select-text whitespace-pre-wrap break-words leading-relaxed text-content-secondary">
+                  {selectedProject.description || 'No ground rules yet.'}
+                </p>
+              </ProjectSettingsSection>
+              {role !== 'client' && <ProjectMemorySection key={selectedProject.id} projectId={selectedProject.id} />}
+              {showBuildSettings && orchestrationSettings?.autonomy && (
+                <ProjectAutonomySection key={selectedProject.id} projectId={selectedProject.id} settings={orchestrationSettings}
+                  canEdit={canEditProjects} onSaved={setOrchestrationSettings} />
+              )}
+              {showBuildSettings && orchestrationSettings && !orchestrationSettings.available && (
+                <p role="status" className="py-3 text-status-warning">
+                  Builds cannot run on this desktop: {orchestrationSettings.reason ?? 'the build service is unavailable.'}
+                </p>
+              )}
             </div>
           )}
         />
