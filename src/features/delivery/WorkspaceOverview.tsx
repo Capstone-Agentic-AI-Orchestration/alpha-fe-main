@@ -296,7 +296,7 @@ export const WorkspaceOverview: React.FC = () => {
                   : 'projects';
             setActiveTab(nextView);
           }} />
-          <MetricCard label="Delivery progress" value={`${deliveryProgress}%`} detail={issues.length > 0 ? `${completedIssues} of ${issues.length} tasks complete` : 'Progress appears as work is added'} icon={Activity} tone={deliveryProgress === 100 && issues.length > 0 ? 'emerald' : 'brand'} onClick={role === 'pm' || role === 'admin' ? () => setActiveTab('analytics') : undefined} />
+          <MetricCard label="Delivery progress" value={`${deliveryProgress}%`} detail={issues.length > 0 ? `${completedIssues} of ${issues.length} tasks complete` : 'Progress appears as work is added'} icon={Activity} tone={deliveryProgress === 100 && issues.length > 0 ? 'emerald' : 'brand'} onClick={role === 'admin' ? () => setActiveTab('analytics') : undefined} />
         </section>
 
         <div className="grid min-h-0 grid-cols-1 gap-5 overflow-y-auto sm:grid-cols-[minmax(0,1.45fr)_minmax(260px,1fr)] sm:overflow-hidden">
