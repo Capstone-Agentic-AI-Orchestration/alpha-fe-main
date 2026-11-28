@@ -48,6 +48,7 @@ import {
 import { apiService, normalizeGitHubRepo, normalizeSkill, onWorkspaceRefused, parseApiError, setActiveWorkspaceId } from '@/shared/services/apiService';
 import { chatSendFailureText } from '@/features/chat/chatSendFailure';
 import { applyChatReplies, mergeLoadedTranscript, mergeThreadsWithCachedMessages } from './chatThreadHydration';
+import { chatTabForThread } from './chatTabNavigation';
 import { boardSyncFailureMessage, createBoardSyncCoordinator } from './boardSyncCoordinator';
 import { runnerSocket } from '@/shared/services/runnerSocket';
 import { fetchServerSnapshot, persist, describeWriteError, ServerStatus } from '@/shared/services/serverSync';
@@ -3951,9 +3952,13 @@ ${e.detail}`;
   const canOpenProjectChat = can('manage_chat') && visibleTabs.includes('chat') && !workspaceLoading && !workspaceSwitching;
   const openChatThread = (id: string) => {
     if (!canOpenProjectChat || !scopedChatThreads.some(thread => thread.id === id)) return;
-    const existing = tabs.find(tab => tab.view === 'chat' && !tab.sessionState?.['chat.history'] && tab.sessionState?.activeThreadId === id);
-    if (existing) setActiveTabId(existing.id);
-    else openNewTab('chat', { activeThreadId: id });
+    const target = chatTabForThread(tabs, currentTab, id);
+    if (target.view !== 'chat' || target.sessionState?.['chat.history'] || target.sessionState?.activeThreadId !== id) {
+      setTabs(previous => previous.map(tab => tab.id === target.id
+        ? { ...tab, view: 'chat', sessionState: { ...tab.sessionState, activeThreadId: id, 'chat.history': false } }
+        : tab));
+    }
+    setActiveTabId(target.id);
   };
   const openChatDraft = (projectId?: string) => {
     if (!canOpenProjectChat) return;
