@@ -155,7 +155,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'agents', label: 'Agents', labels: { dev: 'Agent Directory' }, title: 'Agent Studio', subtitle: 'Manage personas, models, and autonomy', group: 'configure', section: 'resources', icon: Bot },
   { id: 'skills', label: 'Skills', labels: { pm: 'Integrations', admin: 'Integrations' }, title: 'System Skills & MCP', subtitle: 'Tool registry, bash, browser, & MCP', group: 'configure', section: 'resources', sectionByRole: { pm: 'operations', admin: 'operations' }, icon: BookOpen },
 
-  { id: 'analytics', label: 'Analytics', labels: { pm: 'Delivery Health', admin: 'Delivery Health' }, title: 'Operational Analytics', subtitle: 'Run health, delivery activity, and performance', group: 'workspace', section: 'insights', icon: BarChart3 },
+  { id: 'analytics', label: 'Analytics', labels: { admin: 'Delivery Health' }, title: 'Operational Analytics', subtitle: 'Run health, delivery activity, and performance', group: 'workspace', section: 'insights', icon: BarChart3 },
 
   { id: 'operations', label: 'Operations', title: 'Operations Center', subtitle: 'Deployments, uptime, SLAs, and project costs', group: 'workspace', section: 'administration', icon: Activity },
 
@@ -216,7 +216,7 @@ const ROLE_NAV_ALL: Record<UserRole, NavigationTab[]> = {
   // Client work starts with the client and project conversation; inquiries remain separate pre-project intake.
   pm: [
     'clients', 'inquiries', 'projects', 'issues',
-    'chat', 'agents', 'skills', 'analytics', 'settings'
+    'chat', 'agents', 'skills', 'settings'
   ],
   admin: [
     'issues', 'projects',
