@@ -60,6 +60,8 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
   // Opened from a project's conversation: the project is fixed, and a request from there fixes the link too.
   const [projectLocked, setProjectLocked] = useTabSessionState<boolean>(PROJECT_LOCKED_KEY, false);
   const requestFixed = linkedRequest?.source === 'conversation';
+  /** The client's own description of the request, offered for the task but not copied in by default. */
+  const clientWording = linkedRequest?.description?.trim() ?? '';
   const [openRequests, setOpenRequests] = useState<PmOpenRequest[] | null>(null);
   const canLinkRequests = (visibleTabs ?? []).includes('clients');
   const [suggestingSteps, setSuggestingSteps] = useState(false);
@@ -277,7 +279,7 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
               value={title}
               disabled={suggestingSteps}
           onChange={event => { setTitle(event.target.value); setStepProposal(null); setSelectedSteps(new Set()); setStepSuggestionError(''); }}
-              placeholder="What needs to happen?"
+              placeholder={linkedRequest ? 'One piece of the request, e.g. Service rates page' : 'What needs to happen?'}
               required
               aria-required="true"
               aria-invalid={!title.trim()}
@@ -285,8 +287,15 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
             />
           </label>
 
-          <label htmlFor={`${ids}-description`} className="block">
-            <span className="mb-2 block text-[12px] font-medium text-content-secondary">What should be true when this is finished? <span className="font-normal text-content-muted">Optional</span></span>
+          <div>
+          <div className="mb-2 flex items-baseline justify-between gap-3">
+            <label htmlFor={`${ids}-description`} className="block text-[12px] font-medium text-content-secondary">What should be true when this is finished? <span className="font-normal text-content-muted">Optional</span></label>
+            {clientWording && description.trim() !== clientWording && <button type="button" disabled={suggestingSteps}
+              onClick={() => { setDescription(clientWording); setStepProposal(null); setSelectedSteps(new Set()); setStepSuggestionError(''); }}
+              className="shrink-0 text-[11.5px] font-medium text-link hover:text-link-hover disabled:opacity-50">
+              Use the client’s wording
+            </button>}
+          </div>
             <textarea
               id={`${ids}-description`}
               aria-label="Description"
@@ -297,7 +306,7 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
               placeholder="Describe the result in a sentence or two."
               className="w-full resize-y rounded-md border border-control bg-well px-3 py-2.5 text-[13px] leading-relaxed text-content placeholder-content-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
             />
-          </label>
+          </div>
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
