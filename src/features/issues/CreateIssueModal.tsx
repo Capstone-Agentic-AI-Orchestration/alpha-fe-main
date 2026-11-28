@@ -184,10 +184,10 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
     if (!canSubmit || !activeProject || suggestingSteps) return;
     const stepsToCreate = stepProposal?.epics.filter((_epic, index) => selectedSteps.has(index)) ?? [];
     const request = linkedRequest;
-    const linkToRequest = (saved: { id: string }) => {
+    const linkToRequest = (saved: { id: string }, quiet = false) => {
       if (!request) return;
       void linkSavedTaskToRequest(request.ticketId, saved.id, request.source)
-        .then(() => showToast('Task linked', `Linked to the client request “${request.title}”.`, 'success'))
+        .then(() => { if (!quiet) showToast('Task linked', `Linked to the client request “${request.title}”.`, 'success'); })
         .catch(error => showToast('The task was created but not linked',
           `${error instanceof Error ? error.message : 'Try linking it from the client conversation.'}`, 'error'));
     };
@@ -207,6 +207,7 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
         ? {
             onSaved: savedParent => {
               linkToRequest(savedParent);
+              // Each step is part of the same request, so the client follows the steps too.
               stepsToCreate.forEach(step => {
                 createIssue({
                   title: step.title,
@@ -217,7 +218,7 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
                   status: 'backlog',
                   labels: savedParent.labels,
                   assignedHuman: savedParent.assignedHuman
-                });
+                }, request ? { onSaved: savedStep => linkToRequest(savedStep, true) } : undefined);
               });
             }
           }

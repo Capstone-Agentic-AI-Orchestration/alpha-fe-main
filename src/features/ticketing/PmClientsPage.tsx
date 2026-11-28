@@ -19,6 +19,11 @@ import { RemoveClientPanel } from './RemoveClientPanel';
 
 export type ClientSection = 'overview' | 'conversation' | 'tickets' | 'conversations' | 'documents' | 'proposals' | 'projects' | 'access';
 export const PM_CLIENTS_REFRESH_EVENT = 'alpha:pm-clients-refresh';
+/** The New task dialog's other fields, as a new task starts them. */
+export const FRESH_TASK_DRAFT: ReadonlyArray<readonly [string, unknown]> = [
+  ['issueModal.dueDate', ''], ['issueModal.status', 'todo'], ['issueModal.priority', 'medium'], ['issueModal.assignee', ''],
+  ['issueModal.labels', []], ['issueModal.subtasks', []], ['issueModal.newSubtask', ''],
+];
 const SECTIONS: Array<{ id: ClientSection; label: string }> = [
   { id: 'overview', label: 'Overview' },
   { id: 'projects', label: 'Projects' },
@@ -110,11 +115,12 @@ export function PmClientsPage() {
     onOpenInquiries={inquiry => { setOpenInquiry(inquiry ?? null); setActiveTab('inquiries'); }}
     conversationFocus={conversationFocus} onConversationFocusHandled={() => setConversationFocus(null)}
     onCreateTask={draft => {
-      // Fill the New task dialog for this project and remember which request the task is for.
+      // A fresh task for this project and request: nothing left over from a draft cancelled earlier.
       setTabSessionState(activeTabId, 'issueModal.project', draft.projectId);
       setTabSessionState(activeTabId, PROJECT_LOCKED_KEY, true);
       setTabSessionState(activeTabId, 'issueModal.title', draft.title);
       setTabSessionState(activeTabId, 'issueModal.description', draft.description);
+      for (const [key, value] of FRESH_TASK_DRAFT) setTabSessionState(activeTabId, key, value);
       setTabSessionState(activeTabId, LINKED_REQUEST_KEY, draft.request);
       setTabSessionState(activeTabId, 'issueModal.open', true);
     }} />;
